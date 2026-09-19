@@ -1519,6 +1519,21 @@ export function transformCallExpression(node: any, scopeManager: ScopeManager, n
             return;
         }
 
+        // `syminfo.ticker(symbol)` / `syminfo.prefix(symbol)` are Pine v5+
+        // FUNCTIONS that parse a symbol string — distinct from the
+        // same-named data FIELDS (`syminfo.ticker` = the dataset's ticker
+        // string). The runtime exposes the function forms as
+        // `tickerOf`/`prefixOf` so the fields stay plain strings; rewrite
+        // the call form.
+        if (
+            node.callee.object.name === 'syminfo' &&
+            node.callee.property?.type === 'Identifier' &&
+            (node.callee.property.name === 'ticker' || node.callee.property.name === 'prefix') &&
+            node.arguments.length > 0
+        ) {
+            node.callee.property.name = node.callee.property.name === 'ticker' ? 'tickerOf' : 'prefixOf';
+        }
+
         const namespace = node.callee.object.name;
         // Transform arguments using the namespace's param
         const newArgs: any[] = [];

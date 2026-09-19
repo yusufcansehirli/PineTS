@@ -1063,6 +1063,34 @@ export class PineTS {
     }
 
     /**
+     * Wrap the provider's symbol-info data with the namespace members the
+     * transpiled code expects:
+     *  - `param` — the series-wrapping applied to namespace-call arguments
+     *    (mirrors `timeframe.param`; without it the generated
+     *    `syminfo.param(...)` argument wrapper would throw at runtime).
+     *  - `tickerOf` / `prefixOf` — the Pine v5+ `syminfo.ticker(symbol)` /
+     *    `syminfo.prefix(symbol)` FUNCTION forms (parse the passed symbol
+     *    string). The data FIELDS `syminfo.ticker` / `syminfo.prefix` stay
+     *    untouched (dataset values); the transpiler rewrites the call form
+     *    to these members.
+     */
+    private _syminfoNamespace(context: any, base: any) {
+        const tickerOf = (symbol: any) => {
+            const s = typeof symbol === 'string' ? symbol : String(symbol ?? '');
+            const idx = s.indexOf(':');
+            return idx >= 0 ? s.slice(idx + 1) : s;
+        };
+        const prefixOf = (symbol: any) => {
+            const s = typeof symbol === 'string' ? symbol : String(symbol ?? '');
+            const idx = s.indexOf(':');
+            return idx >= 0 ? s.slice(0, idx) : '';
+        };
+        const param = (source: any, index: number = 0) => Series.from(source).get(index);
+        if (!base) return { param, tickerOf, prefixOf };
+        return { ...base, param, tickerOf, prefixOf };
+    }
+
+    /**
      * Initialize a new context for running Pine Script code
      * @private
      */
@@ -1078,7 +1106,7 @@ export class PineTS {
             inputs,
         });
 
-        context.pine.syminfo = this._syminfo;
+        context.pine.syminfo = this._syminfoNamespace(context, this._syminfo);
         // THE CHART TYPE IS THE TICKER (single source of truth): a non-standard chart is
         // addressed by an extended ticker — `new PineTS(source, "SYM;heikinashi", …)` — so
         // the data source can distinguish the chart series from standard-data requests.
@@ -1090,10 +1118,10 @@ export class PineTS {
         const chartModifier = splitTickerModifier(String(this.tickerId ?? '')).modifier;
         context.chartStyle = chartModifier === 'heikinashi' ? 'heikinashi' : 'standard';
         if (this._syminfo && chartModifier === 'heikinashi') {
-            context.pine.syminfo = {
+            context.pine.syminfo = this._syminfoNamespace(context, {
                 ...this._syminfo,
                 tickerid: withTickerModifier(String(this._syminfo.tickerid ?? this.tickerId), 'heikinashi'),
-            };
+            });
         }
         // Chart timezone only affects display formatting (log timestamps).
         // It does NOT override syminfo.timezone, which drives computation

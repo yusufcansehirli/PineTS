@@ -61,8 +61,6 @@ export enum PineArrayType {
 }
 
 export class PineArrayObject {
-    /** Runtime namespace tag; used by the overloaded-method dispatch shim. */
-    public _pineNs: string = 'array';
     private _abs: any;
     private _avg: any;
     private _binary_search: any;
