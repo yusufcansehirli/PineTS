@@ -1669,6 +1669,15 @@ export class Parser {
                 // If we successfully parsed generic and next is (, parse call
                 if (isGeneric && this.match(TokenType.LPAREN)) {
                     expr = this.parseCallExpression(expr);
+                    // Preserve the captured generic type on the CALL node so
+                    // codegen can emit a `__pineTypedVar:<var>=array<T>`
+                    // marker for declarations like `x = array.new<ob>(0)` —
+                    // user UDTs have no other surface for the element type,
+                    // and the analysis side needs it to register the array
+                    // (and its extracted elements) as UDT instances.
+                    if (expr && expr.type === 'CallExpression' && genericType) {
+                        expr._genericType = genericType;
+                    }
                     continue;
                 } else if (!isGeneric) {
                     // Not a generic, break and let comparison operator handle it

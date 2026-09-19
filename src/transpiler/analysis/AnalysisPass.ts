@@ -188,6 +188,14 @@ export function preProcessUdtRegistry(ast: any, scopeManager: ScopeManager): voi
                     if (builtinType) {
                         scopeManager.setVarStaticType(decl.id.name, builtinType);
                     }
+                    // Array-of-UDT elements: `array.new(n, UDT.new(...))` —
+                    // record the element type so `x.first()` / `x.get(i)`
+                    // extraction can infer the UDT (and rewrite field history
+                    // reads like `firstBr.active[1]`).
+                    const elemUdt = inferArrayElementUdtType(decl.init, scopeManager);
+                    if (elemUdt) {
+                        scopeManager.setArrayElementUdtType(decl.id.name, elemUdt);
+                    }
                     continue;
                 }
 
@@ -365,6 +373,23 @@ function inferBuiltinTypeFromInit(init: any): string | undefined {
         }
     }
 
+    // Numeric built-ins: `ta.pivothigh(...)`, `math.max(...)`,
+    // `request.security(...)` produce float/int VALUES (never drawing
+    // instances). Typing them 'float' lets `x = ta.pivothigh(len, len)` bind
+    // a static type so user methods declared on primitive receivers
+    // (`method n(float piv)`, called as `x.n()`) dispatch by type match —
+    // primitive receivers never carry built-in dot-members, so this cannot
+    // hijack anything.
+    if (
+        init.type === 'CallExpression' &&
+        init.callee?.type === 'MemberExpression' &&
+        !init.callee.computed &&
+        init.callee.object?.type === 'Identifier' &&
+        (init.callee.object.name === 'ta' || init.callee.object.name === 'math' || init.callee.object.name === 'request')
+    ) {
+        return 'float';
+    }
+
     if (init.type === 'ConditionalExpression') {
         const consequentType = inferBuiltinTypeFromInit(init.consequent);
         const alternateType = inferBuiltinTypeFromInit(init.alternate);
@@ -456,6 +481,53 @@ function inferUdtTypeFromInit(init: any, scopeManager: ScopeManager): string | u
         }
     }
 
+    // Element extraction from a UDT array: `firstBr = aUniBr.first()` (and
+    // `get/last/shift/pop`). The element type comes from the array-element
+    // registry (populated for `array.new(n, UDT.new(...))` initializers), or
+    // — for empty `array.new()` declarations — from the explicit-annotation
+    // marker `__pineTypedVar:<var>=array<UDT>`. Without it, later
+    // `firstBr.field[N]` history reads stay untransformed (free identifier →
+    // ReferenceError at runtime) and method calls on the elements never
+    // dispatch.
+    if (
+        init.type === 'CallExpression' &&
+        init.callee?.type === 'MemberExpression' &&
+        !init.callee.computed &&
+        init.callee.object?.type === 'Identifier' &&
+        init.callee.property?.type === 'Identifier' &&
+        ['first', 'last', 'get', 'shift', 'pop'].includes(init.callee.property.name)
+    ) {
+        let elemType = scopeManager.getArrayElementUdtType(init.callee.object.name);
+        if (elemType && !scopeManager.isUdtTypeName(elemType)) elemType = undefined;
+        if (!elemType) {
+            const staticType = scopeManager.getVarStaticType(init.callee.object.name);
+            const m = staticType && /^array<([^>]+)>$/.exec(staticType);
+            if (m && scopeManager.isUdtTypeName(m[1].trim())) elemType = m[1].trim();
+        }
+        if (elemType) return elemType;
+    }
+
+    return undefined;
+}
+
+/**
+ * Detect an ARRAY-OF-UDT initializer (`array.new(n, UDT.new(...))`) and
+ * return the element UDT type, for the array-element registry.
+ */
+function inferArrayElementUdtType(init: any, scopeManager: ScopeManager): string | undefined {
+    if (
+        init?.type === 'CallExpression' &&
+        init.callee?.type === 'MemberExpression' &&
+        !init.callee.computed &&
+        init.callee.object?.type === 'Identifier' &&
+        init.callee.object.name === 'array' &&
+        init.callee.property?.name === 'new'
+    ) {
+        for (const arg of init.arguments ?? []) {
+            const t = inferUdtTypeFromInit(arg, scopeManager);
+            if (t) return t;
+        }
+    }
     return undefined;
 }
 

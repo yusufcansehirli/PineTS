@@ -320,6 +320,22 @@ export class ScopeManager {
         return this.udtInstances.get(varName);
     }
 
+    /**
+     * Registry of variables holding an ARRAY OF UDT instances
+     * (`var aUni = array.new(2, unicorn.new(...))`) → the element UDT type.
+     * Enables `x.first()` / `x.get(i)` element-extraction inference
+     * (`firstBr = aUni.first()` registers `firstBr` as a UDT instance too).
+     */
+    private udtArrayElementTypes: Map<string, string> = new Map();
+
+    setArrayElementUdtType(varName: string, typeName: string): void {
+        this.udtArrayElementTypes.set(varName, typeName);
+    }
+
+    getArrayElementUdtType(varName: string): string | undefined {
+        return this.udtArrayElementTypes.get(varName);
+    }
+
     isUdtInstance(varName: string): boolean {
         return this.udtInstances.has(varName);
     }
@@ -393,6 +409,13 @@ export class ScopeManager {
     // dispatched by declared-receiver-type matching at dot-call sites.
 
     setVarStaticType(varName: string, pineType: string): void {
+        // Array annotations carry their element type only in the generic form
+        // (`array<piv>`); `normalizePineBaseType` strips it below. Capture the
+        // element type into the UDT-array registry first so `x.first()` /
+        // `x.get(i)` extraction can infer the UDT. Non-UDT element types
+        // (array<int>, …) are filtered at the consumer.
+        const arrMatch = /^array<([^>]+)>$/.exec(String(pineType ?? '').trim());
+        if (arrMatch) this.udtArrayElementTypes.set(varName, arrMatch[1].trim());
         const base = normalizePineBaseType(pineType);
         if (base) this.varStaticTypes.set(varName, base);
     }

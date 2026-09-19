@@ -924,6 +924,18 @@ export class CodeGenerator {
                 // dot-call dispatch on built-in receivers.
                 this.write(this.indentStr.repeat(this.indent));
                 this.write(`${JSON.stringify(`__pineTypedVar:${declaredName}=${declaredType}`)};\n`);
+            } else if (
+                declaredName &&
+                (!declaredType || declaredType.length === 0) &&
+                typeof decl.init?._genericType === 'string' &&
+                decl.init._genericType.length > 0
+            ) {
+                // `x = array.new<UDT>(...)` — the element type rides on the
+                // CALL's captured generic (no variable annotation). Emit the
+                // static-type marker so the analysis side registers the array
+                // (and `x.first()` / `x.get(i)` extractions) as UDT instances.
+                this.write(this.indentStr.repeat(this.indent));
+                this.write(`${JSON.stringify(`__pineTypedVar:${declaredName}=array<${decl.init._genericType}>`)};\n`);
             }
         }
     }

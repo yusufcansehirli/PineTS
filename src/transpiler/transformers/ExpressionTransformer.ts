@@ -2032,8 +2032,18 @@ export function applyMethodCallOptionalChaining(node: any): void {
         // Field receivers, but not namespace-rooted chains (`$.pine.math.__gt`,
         // `math.abs`, …) — those objects are never na.
         const isFieldReceiver = calleeObj?.type === 'MemberExpression' && !isNamespaceRootedChain(calleeObj);
+        // Case 5 — Plain local-variable receiver: `eachLevel.get_y1()` where
+        // the variable came out of an array/destructure and may hold `na`
+        // (null/undefined) — e.g. `for [i, eachLevel] in someUdt.lines`.
+        // Exclude `$` and namespace roots (`line.new`, `math.min`, …): never
+        // na, and wrapping them churns the output shape for no benefit.
+        const isLocalIdentifierReceiver =
+            calleeObj?.type === 'Identifier' &&
+            calleeObj.name !== CONTEXT_NAME &&
+            !KNOWN_NAMESPACES.includes(calleeObj.name) &&
+            !NAMESPACES_LIKE.includes(calleeObj.name);
 
-        if (isDirect || isChained || isCallChainReceiver || isFieldReceiver) {
+        if (isDirect || isChained || isCallChainReceiver || isFieldReceiver || isLocalIdentifierReceiver) {
             // Double optional chaining: obj?.method?.()
             // The node stays as a CallExpression (safe for AST walkers) but gets:
             //   1. optional: true on the CallExpression  → produces ?.()
