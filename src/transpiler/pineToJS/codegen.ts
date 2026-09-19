@@ -1971,9 +1971,9 @@ export class CodeGenerator {
             if (c.test) {
                 this.write('case ');
                 this.generateExpression(c.test);
-                this.write(':\n');
+                this.write(': {\n');
             } else {
-                this.write('default:\n');
+                this.write('default: {\n');
             }
 
             this.indent++;
@@ -2019,6 +2019,11 @@ export class CodeGenerator {
             }
 
             this.indent--;
+            // Pine switch arms are separate scopes but JS `case` clauses share a
+            // single block scope, so bare `let` declarations in two arms collide
+            // ("Identifier 'x' has already been declared"). Block-scope each arm.
+            this.write(this.indentStr.repeat(this.indent));
+            this.write('}\n');
         }
 
         this.indent--;
