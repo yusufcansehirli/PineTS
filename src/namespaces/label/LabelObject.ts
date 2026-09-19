@@ -7,6 +7,8 @@ export function resetLabelIdCounter() {
 }
 
 export class LabelObject {
+    /** Runtime namespace tag; used by the overloaded-method dispatch shim. */
+    public _pineNs: string = 'label';
     public id: number;
     public x: number;
     public y: number;

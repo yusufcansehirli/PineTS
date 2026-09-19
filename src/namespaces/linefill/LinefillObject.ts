@@ -9,6 +9,8 @@ export function resetLinefillIdCounter() {
 }
 
 export class LinefillObject {
+    /** Runtime namespace tag; used by the overloaded-method dispatch shim. */
+    public _pineNs: string = 'linefill';
     public id: number;
     public line1: LineObject;
     public line2: LineObject;

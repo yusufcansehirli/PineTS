@@ -169,12 +169,24 @@ export class ScopeManager {
     private varStaticTypes: Map<string, string> = new Map();
 
     /**
-     * Registry of user `method` Pine names → declared receiver BASE type
+     * Registry of user `method` Pine names → declared receiver BASE types
      * (first-parameter type, e.g. 'table' for `method cell(table tb, ...)`).
-     * Populated from `$M_<name>.__pineReceiverType__ = '...'` markers emitted
-     * by pine2js codegen.
+     * A LIST because Pine allows overloads (identical method name, different
+     * receiver types — e.g. `method track(box b, …)` / `(label l, …)`).
+     * Populated from `$M_<name>[$<type>].__pineReceiverType__ = '...'` markers
+     * emitted by pine2js codegen.
      */
-    private methodReceiverTypes: Map<string, string> = new Map();
+    private methodReceiverTypes: Map<string, string[]> = new Map();
+
+    /**
+     * User `method` names declared MORE THAN ONCE (overloads). Populated from
+     * `$M_<name>[$<type>].__pineOverloadOf__ = '<name>'` markers emitted by
+     * pine2js codegen. Needed because the receiver-type LIST can dedupe to a
+     * single entry (e.g. `array<int>` / `array<float>` both normalize to
+     * `array`) while the implementations are still emitted with SUFFIXED JS
+     * names — call sites must target the suffixed name, never the bare one.
+     */
+    private overloadedMethodNames: Set<string> = new Set();
 
     /**
      * Registry of user-defined function names → map of {paramName → BASE
@@ -395,11 +407,40 @@ export class ScopeManager {
 
     setMethodReceiverType(pineName: string, pineType: string): void {
         const base = normalizePineBaseType(pineType);
-        if (base) this.methodReceiverTypes.set(pineName, base);
+        if (!base) return;
+        const list = this.methodReceiverTypes.get(pineName) ?? [];
+        if (!list.includes(base)) list.push(base);
+        this.methodReceiverTypes.set(pineName, list);
+    }
+
+    /**
+     * All declared receiver BASE types for a user `method` Pine name.
+     * Multiple entries mean the name is OVERLOADED — call sites must target
+     * the per-(name, receiver type) JS identifier (`$M_name$type`) or the
+     * runtime dispatch shim (`$M_name`) when the static type is unknown.
+     */
+    getMethodReceiverTypes(pineName: string): string[] {
+        return this.methodReceiverTypes.get(pineName) ?? [];
+    }
+
+    /** Register a user `method` name as OVERLOADED (declared 2+ times). */
+    markMethodOverloaded(pineName: string): void {
+        this.overloadedMethodNames.add(pineName);
+    }
+
+    /**
+     * True when the Pine name was declared as a `method` more than once —
+     * the implementations are then emitted with suffixed JS names and call
+     * sites must target the suffixed identifier (or the runtime dispatcher),
+     * never the bare `$M_<name>`.
+     */
+    isMethodOverloaded(pineName: string): boolean {
+        return this.overloadedMethodNames.has(pineName);
     }
 
     getMethodReceiverType(pineName: string): string | undefined {
-        return this.methodReceiverTypes.get(pineName);
+        const list = this.methodReceiverTypes.get(pineName);
+        return list && list.length === 1 ? list[0] : undefined;
     }
 
     setFunctionParamStaticTypes(funcName: string, paramTypes: Record<string, string>): void {

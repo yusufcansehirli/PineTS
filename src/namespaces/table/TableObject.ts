@@ -41,6 +41,8 @@ export interface MergeRegion {
 }
 
 export class TableObject {
+    /** Runtime namespace tag; used by the overloaded-method dispatch shim. */
+    public _pineNs: string = 'table';
     public id: number;
     public position: string;
     public columns: number;

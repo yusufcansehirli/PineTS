@@ -29,6 +29,12 @@ export class CodeGenerator {
     // follow the `_$N` rename — unlike variable collisions, where `fill(...)`
     // still means the built-in.
     private userFunctionCollisions: Set<string>;
+    // Pine `method` OVERLOAD groups: method name → its declarations when the
+    // name is declared more than once (different receiver types). Overloaded
+    // methods are emitted as `$M_<name>$<receiverType>` so the duplicate JS
+    // declarations cannot collide, plus a `$M_<name>` runtime shim that
+    // dispatches on the receiver's `_pineNs` tag. Empty for unique names.
+    private methodOverloadGroups: Map<string, Array<{ fn: any; recvBase?: string }>>;
     constructor(options: { indentStr?: string; sourceCode?: string; includeSourceComments?: boolean } = {}) {
         this.indent = 0;
         this.indentStr = options.indentStr || '  ';
@@ -40,6 +46,25 @@ export class CodeGenerator {
         this.paramRenameCounter = 0;
         this.functionParams = new Map();
         this.userFunctionCollisions = new Set();
+        this.methodOverloadGroups = new Map();
+    }
+
+    /**
+     * Receiver BASE type of a `method` declaration — the first parameter's
+     * Pine type annotation, normalized the same way as
+     * `normalizePineBaseType` (drop any `<…>` generic args, take the last
+     * whitespace-separated token). Used both for the per-overload JS name
+     * suffix and the `__pineReceiverType__` marker.
+     */
+    private methodReceiverBase(fn: any): string | undefined {
+        const p0 = fn?.params?.[0];
+        const t = p0?.type === 'AssignmentPattern' ? p0.left?.varType : p0?.varType;
+        if (typeof t !== 'string' || t.length === 0) return undefined;
+        let s = t.trim();
+        const lt = s.indexOf('<');
+        if (lt >= 0) s = s.slice(0, lt);
+        const parts = s.split(/\s+/).filter(Boolean);
+        return parts.length > 0 ? parts[parts.length - 1] : undefined;
     }
 
     /**
@@ -383,6 +408,48 @@ export class CodeGenerator {
         // type references keep resolving.
         this.renameFunctionsCollidingWithTypes(node);
 
+        // Pine allows method OVERLOADS: the same `method` name declared for
+        // several receiver types. JS has no overloads — all declarations
+        // would collapse onto one identifier. Collect the groups up front so
+        // `generateFunctionDeclaration` can suffix each implementation with
+        // its receiver type ($M_track$box / $M_track$label / …) and a runtime
+        // dispatch shim can be appended after the program body.
+        this.methodOverloadGroups = new Map();
+        const methodGroups = new Map<string, any[]>();
+        for (const stmt of node.body || []) {
+            if (stmt?.type === 'FunctionDeclaration' && stmt.id?.isMethod && stmt.id.name) {
+                const list = methodGroups.get(stmt.id.name) ?? [];
+                list.push(stmt);
+                methodGroups.set(stmt.id.name, list);
+            }
+        }
+        for (const [name, fns] of methodGroups) {
+            if (fns.length > 1) {
+                this.methodOverloadGroups.set(
+                    name,
+                    fns.map((fn) => ({ fn, recvBase: this.methodReceiverBase(fn) }))
+                );
+            }
+        }
+
+        // Overloaded method names: publish a name → {receiverNs → impl}
+        // registry onto the context so the runtime can dispatch UFCS-style
+        // direct calls (and call sites whose static receiver type is
+        // unknown) by the receiver's `_pineNs` tag. Emitted BEFORE the
+        // program body — the implementation function declarations are
+        // hoisted, and call sites execute before the end of the first bar.
+        // Statically-typed call sites bypass the registry and target the
+        // suffixed implementation directly.
+        for (const [name, entries] of this.methodOverloadGroups) {
+            const impls = entries.filter((e) => !!e.recvBase);
+            if (impls.length === 0) continue;
+            this.write(`$.methodOverloads = $.methodOverloads || {};\n`);
+            for (const e of impls) {
+                const key = `${name}\u0000${e.recvBase}`;
+                this.write(`$.methodOverloads[${JSON.stringify(key)}] = $M_${name}$${e.recvBase};\n`);
+            }
+        }
+
         for (let i = 0; i < node.body.length; i++) {
             this.generateStatement(node.body[i]);
 
@@ -672,7 +739,23 @@ export class CodeGenerator {
         // not allow `$` in identifiers, so this prefix is collision-proof.
         // The call-site rewrite (ExpressionTransformer) and the marker reader
         // (AnalysisPass) both know about the prefix.
-        const jsFnName = isMethod ? `$M_${node.id.name}` : node.id.name;
+        //
+        // Overloaded method names (same name, multiple receiver types) add a
+        // `$<receiverType>` suffix per implementation so the declarations do
+        // not collapse onto one identifier; the appended `$M_<name>` shim
+        // dispatches at runtime when the static receiver type is unknown.
+        let jsFnName = node.id.name;
+        if (isMethod) {
+            const group = this.methodOverloadGroups.get(node.id.name);
+            if (group && group.length > 1) {
+                const entry = group.find((e: any) => e.fn === node);
+                jsFnName = entry?.recvBase
+                    ? `$M_${node.id.name}$${entry.recvBase}`
+                    : `$M_${node.id.name}$_u${group.indexOf(entry)}`;
+            } else {
+                jsFnName = `$M_${node.id.name}`;
+            }
+        }
 
         this.write('function ');
         this.write(jsFnName);
@@ -707,6 +790,17 @@ export class CodeGenerator {
         if (isMethod) {
             this.write(this.indentStr.repeat(this.indent));
             this.write(`${jsFnName}.__pineMethod__ = true;\n`);
+
+            // Overload-group marker: names declared 2+ times keep their
+            // suffixed JS identifiers, so call sites must never target the
+            // bare `$M_<name>`. The receiver-type LIST alone cannot carry
+            // this (annotations like `array<int>` / `array<float>` normalize
+            // to one base), hence the explicit flag.
+            const overloadGroup = this.methodOverloadGroups.get(node.id.name);
+            if (overloadGroup && overloadGroup.length > 1) {
+                this.write(this.indentStr.repeat(this.indent));
+                this.write(`${jsFnName}.__pineOverloadOf__ = ${JSON.stringify(node.id.name)};\n`);
+            }
 
             // Emit the declared receiver type (first-parameter type) so the
             // transpile phase can dispatch dot-calls on BUILT-IN receivers

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 export class ChartPointObject {
+    /** Runtime namespace tag; used by the overloaded-method dispatch shim. */
+    public _pineNs: string = 'chart.point';
     public time: number | undefined;
     public index: number | undefined;
     public price: number;

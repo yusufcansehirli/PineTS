@@ -1523,6 +1523,11 @@ export function transformFunctionDeclaration(node: any, scopeManager: ScopeManag
                 scopeManager.addLocalSeriesVar(param.name);
             } else if (param.type === 'AssignmentPattern' && param.left?.type === 'Identifier') {
                 scopeManager.addLocalSeriesVar(param.left.name);
+            } else if (param.type === 'RestElement' && param.argument?.type === 'Identifier') {
+                // Rest params (`function f(...args)`) bind a plain JS array —
+                // register the name as a param so body references stay raw
+                // identifiers instead of resolving to context variables.
+                scopeManager.addLocalSeriesVar(param.argument.name);
             }
         });
 
@@ -1570,6 +1575,8 @@ export function transformFunctionDeclaration(node: any, scopeManager: ScopeManag
                 scopeManager.removeLocalSeriesVar(param.name);
             } else if (param.type === 'AssignmentPattern' && param.left?.type === 'Identifier') {
                 scopeManager.removeLocalSeriesVar(param.left.name);
+            } else if (param.type === 'RestElement' && param.argument?.type === 'Identifier') {
+                scopeManager.removeLocalSeriesVar(param.argument.name);
             }
         });
         if (paramTypes) {

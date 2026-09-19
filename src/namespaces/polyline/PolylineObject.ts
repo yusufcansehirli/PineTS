@@ -9,6 +9,8 @@ export function resetPolylineIdCounter() {
 }
 
 export class PolylineObject {
+    /** Runtime namespace tag; used by the overloaded-method dispatch shim. */
+    public _pineNs: string = 'polyline';
     public id: number;
     public points: ChartPointObject[];
     public curved: boolean;

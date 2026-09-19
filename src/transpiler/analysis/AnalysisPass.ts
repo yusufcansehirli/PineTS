@@ -269,10 +269,11 @@ export function preProcessUdtRegistry(ast: any, scopeManager: ScopeManager): voi
                 left.property?.type !== 'Identifier' ||
                 left.object?.type !== 'Identifier') return;
             const rawName = left.object.name;
-            // Methods carry a `$M_` JS-name prefix; strip it so the registry
-            // is keyed by the Pine name `transformFunctionDeclaration` will
-            // look up at call time.
-            const funcName = rawName.startsWith('$M_') ? rawName.slice(3) : rawName;
+            // Methods carry a `$M_` JS-name prefix; strip it — and any
+            // `$<receiverType>` overload suffix (`$M_track$box`) — so the
+            // registry is keyed by the Pine name the call-site dispatch
+            // looks up at call time.
+            const funcName = (rawName.startsWith('$M_') ? rawName.slice(3) : rawName).split('$')[0];
 
             // `$M_<name>.__pineReceiverType__ = '<type>'` — declared receiver
             // type of a user `method`, used for dot-call dispatch on built-in
@@ -280,6 +281,17 @@ export function preProcessUdtRegistry(ast: any, scopeManager: ScopeManager): voi
             if (left.property.name === '__pineReceiverType__') {
                 if (expr.right?.type === 'Literal' && typeof expr.right.value === 'string') {
                     scopeManager.setMethodReceiverType(funcName, expr.right.value);
+                }
+                return;
+            }
+
+            // `$M_<name>[$<type>].__pineOverloadOf__ = '<name>'` — marks a
+            // member of an overload group (name declared 2+ times). Call
+            // sites must then target the suffixed identifier, never the
+            // bare `$M_<name>` (which no longer exists).
+            if (left.property.name === '__pineOverloadOf__') {
+                if (expr.right?.type === 'Literal' && typeof expr.right.value === 'string') {
+                    scopeManager.markMethodOverloaded(expr.right.value);
                 }
                 return;
             }
@@ -542,7 +554,7 @@ export function runAnalysisPass(ast: any, scopeManager: ScopeManager): string | 
                 expr.left.object?.type === 'Identifier' &&
                 expr.right?.value === true) {
                 const jsName = expr.left.object.name;
-                const pineName = jsName.startsWith('$M_') ? jsName.slice(3) : jsName;
+                const pineName = (jsName.startsWith('$M_') ? jsName.slice(3) : jsName).split('$')[0];
                 scopeManager.addUserMethod(pineName);
                 // Also expose the Pine name as a "user function" so the call-site
                 // check `isUserFunction(methodName) && isUserMethod(methodName)`

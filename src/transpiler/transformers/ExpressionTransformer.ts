@@ -1695,16 +1695,32 @@ export function transformCallExpression(node: any, scopeManager: ScopeManager, n
             // forms exist, the regular function takes precedence.
             const calleeName = node.callee.name;
             let fnRef: any = node.callee;
+            let useOverloadDispatch = false;
             if (scopeManager.isUserMethod(calleeName) && !scopeManager.isRegularUserFunction(calleeName)) {
-                fnRef = ASTFactory.createIdentifier(`$M_${calleeName}`);
-                fnRef._skipTransformation = true;
+                if (
+                    scopeManager.getMethodReceiverTypes(calleeName).length > 1 ||
+                    scopeManager.isMethodOverloaded(calleeName)
+                ) {
+                    // OVERLOADED method name called in UFCS/direct form —
+                    // the receiver's static type is unknown here, so dispatch
+                    // at runtime through `$.callOverload`.
+                    useOverloadDispatch = true;
+                } else {
+                    fnRef = ASTFactory.createIdentifier(`$M_${calleeName}`);
+                    fnRef._skipTransformation = true;
+                }
             }
 
             // Construct new arguments list: [originalFn, callId, ...originalArgs]
-            const newArgs = [fnRef, callId, ...node.arguments];
+            // (overload dispatch: [methodName, callId, ...originalArgs])
+            const newArgs = useOverloadDispatch
+                ? [{ type: 'Literal', value: calleeName }, callId, ...node.arguments]
+                : [fnRef, callId, ...node.arguments];
 
             // Update node
-            node.callee = contextCall;
+            node.callee = useOverloadDispatch
+                ? ASTFactory.createMemberExpression(ASTFactory.createContextIdentifier(), ASTFactory.createIdentifier('callOverload'))
+                : contextCall;
             node.arguments = newArgs;
         }
 
@@ -1771,8 +1787,8 @@ export function transformCallExpression(node: any, scopeManager: ScopeManager, n
             // receiver's static type is the constructor's namespace.
             receiverBaseType = _obj.callee.object.name;
         }
-        const methodReceiverType = scopeManager.getMethodReceiverType(methodName);
-        const receiverTypeMatches = !!receiverBaseType && !!methodReceiverType && receiverBaseType === methodReceiverType;
+        const methodReceiverTypes = scopeManager.getMethodReceiverTypes(methodName);
+        const receiverTypeMatches = !!receiverBaseType && methodReceiverTypes.includes(receiverBaseType);
 
         // UDT-instance dispatch (pre-existing rule, kept as a fallback for
         // methods whose declared receiver type could not be extracted): a
@@ -1827,9 +1843,31 @@ export function transformCallExpression(node: any, scopeManager: ScopeManager, n
             // Methods are emitted with a `$M_` prefix on their JS name to avoid
             // collision with regular functions of the same Pine name. Resolve
             // the call against the prefixed JS identifier.
-            // Mark with _skipTransformation to prevent the identifier from being resolved
-            // to a same-named variable (e.g. `isSame2` function vs `isSame2` variable).
-            const functionRef = ASTFactory.createIdentifier(`$M_${methodName}`);
+            // Overloaded names (declared 2+ times — `method track(box …)` /
+            // `(label …)` / `(line …)` and even same-base overloads like
+            // `array<int>` / `array<float>`) are emitted as
+            // `$M_<name>$<receiverType>` per implementation. The bare
+            // `$M_<name>` never exists for them, so call sites with a
+            // statically-resolved receiver type target the typed
+            // implementation directly; everything else dispatches at runtime
+            // through `$.callOverload` (reads the `$.methodOverloads`
+            // registry published by codegen, keyed `${name}\u0000${ns}`, by
+            // the receiver's `_pineNs` tag).
+            const methodOverloaded = methodReceiverTypes.length > 1 || scopeManager.isMethodOverloaded(methodName);
+            const staticallyResolved =
+                !methodOverloaded || (!!receiverBaseType && methodReceiverTypes.includes(receiverBaseType));
+            if (!staticallyResolved) {
+                node.callee = ASTFactory.createMemberExpression(
+                    ASTFactory.createContextIdentifier(),
+                    ASTFactory.createIdentifier('callOverload')
+                );
+                node.arguments = [{ type: 'Literal', value: methodName }, callId, transformedObj, ...transformedArgs];
+                node._transformed = true;
+                return;
+            }
+            const functionRef = ASTFactory.createIdentifier(
+                methodOverloaded ? `$M_${methodName}$${receiverBaseType}` : `$M_${methodName}`
+            );
             functionRef._skipTransformation = true;
 
             const newArgs = [functionRef, callId, transformedObj, ...transformedArgs];

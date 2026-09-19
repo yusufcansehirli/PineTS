@@ -7,6 +7,8 @@ export function resetBoxIdCounter() {
 }
 
 export class BoxObject {
+    /** Runtime namespace tag; used by the overloaded-method dispatch shim. */
+    public _pineNs: string = 'box';
     public id: number;
     // Coordinates
     public left: number;

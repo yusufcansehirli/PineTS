@@ -919,6 +919,38 @@ export class Context {
         }
     }
 
+    /**
+     * Registry of user `method` overload implementations, keyed
+     * `${pineName}\u0000${receiverNs}`. Populated by transpiled programs
+     * (`$.methodOverloads[key] = $M_name$ns`) so that UFCS/direct calls of an
+     * overloaded method name — where the receiver's static type is unknown at
+     * transpile time — can dispatch on the receiver's runtime `_pineNs` tag.
+     */
+    public methodOverloads: Record<string, Function> = {};
+
+    /**
+     * Dispatch a direct/UFCS call of an OVERLOADED user `method` by the
+     * receiver's runtime namespace tag. Mirrors `call()`'s call-id framing so
+     * per-call-path local state keeps working inside the implementation.
+     * @param name - Pine method name
+     * @param id - The call ID to use
+     * @param args - Receiver followed by the method arguments
+     */
+    public callOverload(name: string, id: string, ...args: any[]) {
+        this.pushId(id);
+        try {
+            const recv = args[0];
+            const ns = recv && (recv as any)._pineNs;
+            const fn = ns ? this.methodOverloads[`${name}\u0000${ns}`] : undefined;
+            if (typeof fn !== 'function') {
+                throw new Error(`$${name}: no method overload for receiver namespace ${String(ns)}`);
+            }
+            return (fn as any)(...args);
+        } finally {
+            this.popId();
+        }
+    }
+
     //#endregion
 
     //#region [Deprecated getters] ===========================
