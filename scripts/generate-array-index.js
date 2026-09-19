@@ -126,11 +126,20 @@ ${getters.map((g) => `      ${g}: ${g}`).join(',\n')}
     });`
                 : '';
 
+        // Instance delegates that must tolerate Pine `na` receivers: na is
+        // NaN/undefined at runtime and `array.size(na)` is a no-op returning na
+        // on the platform (a raw `id.size(...)` crashes with a TypeError).
+        const naTolerantDelegates = new Set(['size']);
+
         // Generate methods installation
         const methodInstall = methods
             .map((m) => {
                 if (staticMethods.includes(m.classProp)) {
                     return `    this.${m.classProp} = ${m.export}(context);`;
+                }
+                if (naTolerantDelegates.has(m.classProp)) {
+                    return `    this.${m.classProp} = (id: PineArrayObject, ...args: any[]) =>
+        id == null || (typeof id === 'number' && Number.isNaN(id)) ? undefined : id.${m.classProp}(...args);`;
                 }
                 return `    this.${m.classProp} = (id: PineArrayObject, ...args: any[]) => id.${m.classProp}(...args);`;
             })
