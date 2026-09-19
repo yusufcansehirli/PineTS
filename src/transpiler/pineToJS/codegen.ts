@@ -374,6 +374,15 @@ export class CodeGenerator {
 
     // Generate Program node
     generateProgram(node) {
+        // Pine keeps the type and function namespaces separate; JS does not.
+        // A user function sharing its name with a UDT type would emit both
+        // `const X = Type({...})` and `function X(...)` in the same scope —
+        // an immediate parse error ("Identifier 'X' has already been
+        // declared"). Suffix the FUNCTION's identifier (and its call
+        // references) while leaving the type's name intact so `X.new(...)`
+        // type references keep resolving.
+        this.renameFunctionsCollidingWithTypes(node);
+
         for (let i = 0; i < node.body.length; i++) {
             this.generateStatement(node.body[i]);
 
@@ -389,6 +398,49 @@ export class CodeGenerator {
                 }
             }
         }
+    }
+
+    private renameFunctionsCollidingWithTypes(program: any): void {
+        const typeNames = new Set<string>();
+        for (const stmt of program.body || []) {
+            if (stmt?.type === 'TypeDefinition' && stmt.name) typeNames.add(stmt.name);
+        }
+        if (typeNames.size === 0) return;
+
+        const collided = new Set<string>();
+        for (const stmt of program.body || []) {
+            if (stmt?.type === 'FunctionDeclaration' && stmt.id?.name && typeNames.has(stmt.id.name)) {
+                let newName = `${stmt.id.name}_$$fn`;
+                let n = 0;
+                while (typeNames.has(newName)) newName = `${stmt.id.name}_$$fn${++n}`;
+                collided.add(stmt.id.name);
+                stmt.id.name = newName;
+            }
+        }
+        if (collided.size === 0) return;
+
+        const walk = (node: any, parent: any): void => {
+            if (!node || typeof node !== 'object') return;
+            if (node.type === 'Identifier' && collided.has(node.name)) {
+                // Type references (`level.new(...)`) stay on the type object.
+                const isMemberObject =
+                    parent?.type === 'MemberExpression' && parent.object === node && !parent.computed;
+                if (!isMemberObject) node.name = `${node.name}_$$fn`;
+                return;
+            }
+            for (const key of Object.keys(node)) {
+                if (key === 'type') continue;
+                const val = node[key];
+                if (Array.isArray(val)) {
+                    for (const child of val) {
+                        if (child && typeof child === 'object') walk(child, node);
+                    }
+                } else if (val && typeof val === 'object' && val.type) {
+                    walk(val, node);
+                }
+            }
+        };
+        for (const stmt of program.body || []) walk(stmt, program);
     }
 
     // Generate any statement

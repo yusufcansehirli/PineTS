@@ -257,8 +257,9 @@ export class Parser {
         else if (this.match(TokenType.KEYWORD, 'var') || this.match(TokenType.KEYWORD, 'varip')) {
             stmt = this.parseVarDeclaration();
         }
-        // Method declaration
-        else if (this.match(TokenType.KEYWORD, 'method')) {
+        // Method declaration (only when followed by a name + parameter list —
+        // `method = input.string(...)` is a plain variable named `method`)
+        else if (this.match(TokenType.KEYWORD, 'method') && this.isMethodDeclaration()) {
             stmt = this.parseMethodDeclaration();
         }
         // Function declaration
@@ -326,15 +327,18 @@ export class Parser {
         if (stmt) {
             stmt._line = startLine;
             
-            // Handle comma-separated statements on the same line: a = high, b = low
-            // Only handle commas at the top level (not in recursive calls)
-            if (handleCommas && this.match(TokenType.COMMA) && this.peek().line === startLine) {
+            // Handle comma-separated statements: `a = high, b = low` — also when
+            // the comma sits on a continuation line after a multi-line call
+            // (`indicator(...\n),n=bar_index`). Any comma immediately following a
+            // complete statement is a sequence separator in Pine; recursion is
+            // guarded by the `handleCommas` flag instead of line numbers.
+            if (handleCommas && this.match(TokenType.COMMA)) {
                 const statements = [stmt];
-                
-                while (this.match(TokenType.COMMA) && this.peek().line === startLine) {
+
+                while (this.match(TokenType.COMMA)) {
                     this.advance(); // consume comma
                     this.skipNewlines(true); // skip any whitespace after comma
-                    
+
                     // Parse the next statement on the same line (don't handle commas recursively)
                     const nextStmt = this.parseStatement(false);
                     if (nextStmt) {
@@ -507,6 +511,11 @@ export class Parser {
             this.skipNewlines();
             if (this.match(TokenType.DEDENT)) break;
 
+            // Optional var/varip qualifier on a field (Pine v6 allows persistent
+            // fields); the qualifier does not change the emitted shape here.
+            if (this.match(TokenType.KEYWORD, 'var') || this.match(TokenType.KEYWORD, 'varip')) {
+                this.advance();
+            }
             // Parse field: type name [= defaultValue]
             const fieldType = this.parseTypeExpression(); // Now handles generics
             // Field names may be contextual keywords (e.g. `int type = 0`) — Pine
@@ -1399,6 +1408,13 @@ export class Parser {
         return new BlockStatement(statements);
     }
 
+    // Check if the current `method` keyword introduces a method declaration:
+    // `method name(params) => ...`. A bare `method` used as a variable name
+    // (`method = input.string(...)`) must not be treated as a declaration.
+    isMethodDeclaration() {
+        return this.peek(1)?.type === TokenType.IDENTIFIER && this.peek(2)?.value === '(';
+    }
+
     // Check if current position looks like tuple destructuring
     isTupleDestructuring() {
         if (!this.match(TokenType.LBRACKET)) return false;
@@ -1676,6 +1692,14 @@ export class Parser {
             }
             // Index/history operator
             else if (this.match(TokenType.LBRACKET)) {
+                // A `[` immediately after a statement boundary (NEWLINE/DEDENT —
+                // e.g. a switch's arm block dedenting into a bare tuple
+                // expression like `[uV, dV]`) starts a NEW statement's array
+                // literal, never a postfix index on the previous expression.
+                const prevToken = this.peek(-1);
+                if (prevToken && (prevToken.type === TokenType.NEWLINE || prevToken.type === TokenType.DEDENT)) {
+                    break;
+                }
                 // If this looks like tuple destructuring [a, b, c] = ..., it's a new
                 // statement, not a postfix index on the previous expression.
                 // This happens after block expressions like switch where DEDENT is
