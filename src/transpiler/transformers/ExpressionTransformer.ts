@@ -1753,6 +1753,13 @@ export function transformCallExpression(node: any, scopeManager: ScopeManager, n
                 receiverBaseType = normalizePineBaseType(fieldType);
             }
         } else if (
+            _obj.type === 'Literal' &&
+            typeof _obj.value === 'string'
+        ) {
+            // Literal receiver: `"America/New_York".timeSess(...)` — the
+            // receiver's static type is string.
+            receiverBaseType = 'string';
+        } else if (
             _obj.type === 'CallExpression' &&
             _obj.callee?.type === 'MemberExpression' &&
             !_obj.callee.computed &&

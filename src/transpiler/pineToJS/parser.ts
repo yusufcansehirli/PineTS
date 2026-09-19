@@ -1411,8 +1411,13 @@ export class Parser {
     // Check if the current `method` keyword introduces a method declaration:
     // `method name(params) => ...`. A bare `method` used as a variable name
     // (`method = input.string(...)`) must not be treated as a declaration.
+    // Method names may be contextual keywords (`type`, `method`, `enum`).
     isMethodDeclaration() {
-        return this.peek(1)?.type === TokenType.IDENTIFIER && this.peek(2)?.value === '(';
+        const name = this.peek(1);
+        const isName =
+            name?.type === TokenType.IDENTIFIER ||
+            (name?.type === TokenType.KEYWORD && ['type', 'method', 'enum'].includes(name.value));
+        return !!isName && this.peek(2)?.value === '(';
     }
 
     // Check if current position looks like tuple destructuring
