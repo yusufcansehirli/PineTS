@@ -544,7 +544,7 @@ export function transformMemberExpression(memberNode: any, originalParamName: st
             };
         }
 
-        const getCall = ASTFactory.createGetCall(memberNode.object, memberNode.property);
+        const getCall = ASTFactory.createGetCall(memberNode.object, transformHistoryIndex(memberNode.property, scopeManager));
 
         // Preserve location
         if (memberNode.start) getCall.start = memberNode.start;
@@ -595,7 +595,7 @@ export function transformMemberExpression(memberNode: any, originalParamName: st
             // Replace leaf `bar` with `$.get(<base-ref>, lookback)` and drop
             // the outer `[N]` — the chain (`.low`) now reads from the previous
             // bar's UDT instance.
-            cursor.object = ASTFactory.createGetCall(baseRef, memberNode.property);
+            cursor.object = ASTFactory.createGetCall(baseRef, transformHistoryIndex(memberNode.property, scopeManager));
             // Re-anchor memberNode to the (now-rewritten) inner MemberExpression.
             const inner = memberNode.object;
             Object.assign(memberNode, inner);
@@ -694,7 +694,7 @@ function transformOperand(node: any, scopeManager: ScopeManager, namespace: stri
                     property: { type: 'Identifier', name: '__value' },
                     computed: false,
                 };
-                return ASTFactory.createGetCall(valueExpr, node.property);
+                return ASTFactory.createGetCall(valueExpr, transformHistoryIndex(node.property, scopeManager));
             }
 
             // Handle array access
@@ -731,7 +731,7 @@ function transformOperand(node: any, scopeManager: ScopeManager, namespace: stri
                 const [scopedName] = scopeManager.getVariable(node.object.name);
                 const isUserVariable = scopedName !== node.object.name;
                 if (isUserVariable && !scopeManager.isLoopVariable(node.object.name)) {
-                    return ASTFactory.createGetCall(transformedObject, node.property);
+                    return ASTFactory.createGetCall(transformedObject, transformHistoryIndex(node.property, scopeManager));
                 }
             }
 
@@ -790,6 +790,34 @@ function transformOperand(node: any, scopeManager: ScopeManager, namespace: stri
     }
 
     return node;
+}
+
+/** History-read index (`X[n]`) lowering: a user/context variable index must be
+ *  read at the current bar (`$.get(var, 0)`), not left as a raw identifier —
+ *  a raw name at global scope is a ReferenceError at runtime. Loop variables
+ *  and literals stay as-is. */
+function transformHistoryIndex(indexNode: any, scopeManager: ScopeManager): any {
+    if (!indexNode || indexNode.type !== 'Identifier') return indexNode;
+    if (scopeManager.isLoopVariable(indexNode.name)) return indexNode;
+    if (scopeManager.isContextBound(indexNode.name) && !scopeManager.isRootParam(indexNode.name)) {
+        const valueExpr = {
+            type: 'MemberExpression',
+            object: { type: 'Identifier', name: indexNode.name },
+            property: { type: 'Identifier', name: '__value' },
+            computed: false,
+        };
+        const wrapped: any = ASTFactory.createGetCall(valueExpr, 0);
+        wrapped._transformed = true;
+        return wrapped;
+    }
+    const [scopedName] = scopeManager.getVariable(indexNode.name);
+    if (scopedName && scopedName !== indexNode.name) {
+        const ref = transformIdentifierForParam(indexNode, scopeManager);
+        const wrapped: any = ASTFactory.createGetCall(ref, 0);
+        wrapped._transformed = true;
+        return wrapped;
+    }
+    return indexNode;
 }
 
 function getParamFromBinaryExpression(node: any, scopeManager: ScopeManager, namespace: string): any {
@@ -1107,7 +1135,7 @@ export function transformFunctionArgument(arg: any, namespace: string, scopeMana
                           return id;
                       })()
                     : createScopedVariableReference(baseName, scopeManager);
-                cursor.object = ASTFactory.createGetCall(baseRef, arg.property);
+                cursor.object = ASTFactory.createGetCall(baseRef, transformHistoryIndex(arg.property, scopeManager));
                 // `arg.object` is now the rewritten `$.get(<base>, N).field…`
                 // chain; it replaces the whole `arg` expression. The outer
                 // `$.param(...)` wrapper that the rest of this branch would
@@ -1432,7 +1460,7 @@ function resolveCalleeObject(node: any, parentNode: any, scopeManager: ScopeMana
             // `$.get(arr, 2)` so the stored series is read. Leaving the raw
             // bracket indexes the Series wrapper object itself → undefined at
             // runtime (`undefined.get(...)` → TypeError).
-            const getCall = ASTFactory.createGetCall(node.object, node.property);
+            const getCall = ASTFactory.createGetCall(node.object, transformHistoryIndex(node.property, scopeManager));
             Object.assign(node, getCall);
         }
     } else if (node.type === 'CallExpression') {
