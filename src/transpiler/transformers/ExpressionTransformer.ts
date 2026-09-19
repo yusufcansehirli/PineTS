@@ -1946,7 +1946,16 @@ export function transformCallExpression(node: any, scopeManager: ScopeManager, n
     //   Case 1: callee.object IS the $.get() call directly  (direct pattern)
     //   Case 2: callee.object is a MemberExpression with $.get() deeper in chain (chained pattern)
     // ---------------------------------------------------------------------------
-    if (node.callee && node.callee.type === 'MemberExpression') {
+    applyMethodCallOptionalChaining(node);
+}
+
+/** Pine `na.method()` is a silent no-op; JS throws on `undefined.method()`.
+ *  Attach double optional chaining (`obj?.method?.()`) to built-in-style
+ *  method calls whose receiver can be na: $.get() results, field accesses
+ *  and call-chain results. Namespace-rooted receivers are excluded. */
+export function applyMethodCallOptionalChaining(node: any): void {
+    if (!node || !node.callee || node.callee.type !== 'MemberExpression') return;
+    {
         const calleeObj = node.callee.object;
         // Case 1 — Direct: $.get(X, N).method()
         //   callee.object is the $.get() CallExpression itself

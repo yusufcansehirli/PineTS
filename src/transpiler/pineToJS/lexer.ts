@@ -158,6 +158,21 @@ export class Lexer {
             return;
         }
 
+        // Comment-only lines are layout-neutral: they must not emit INDENT or
+        // DEDENT, otherwise comments written at column 0 inside an indented
+        // block (very common in published sources) collapse the block.
+        if (this.peek() === '/' && this.source[this.pos + 1] === '/') {
+            return;
+        }
+
+        // A line that STARTS with a binary/ternary operator (or `and`/`or`)
+        // is a continuation of the previous expression even when the previous
+        // token is an operand (`j =\n point1\n - point2`). Treat it like the
+        // other continuation forms: no INDENT/DEDENT for this line.
+        if (this.startsLineWithContinuationOperator()) {
+            return;
+        }
+
         // Convert spaces to indent levels (4 spaces = 1 level)
         indent += Math.floor(spaceCount / 4);
 
@@ -195,6 +210,28 @@ export class Lexer {
             }
         }
         // Same indentation - no INDENT/DEDENT
+    }
+
+    /**
+     * True when the current line begins (after indentation) with a binary or
+     * ternary operator, or the `and`/`or` keywords — such lines continue the
+     * previous expression and must not shift the indent stack.
+     */
+    private startsLineWithContinuationOperator(): boolean {
+        const ch = this.peek();
+        const next = this.source[this.pos + 1];
+        const isOp = ch === '-' || ch === '+' || ch === '*' || ch === '/' || ch === '%' || ch === '?' || ch === ':';
+        if (isOp) {
+            // Binary-continuation style writes the operator first with a space
+            // (`- point2`); the tight form (`-5`) is a negative literal that
+            // legitimately begins a new block line and keeps INDENT handling.
+            return next === ' ' || next === '\t';
+        }
+        if (ch === 'a' || ch === 'o') {
+            const rest = this.source.slice(this.pos, this.pos + 4);
+            return /^(and\b|or\b)/.test(rest);
+        }
+        return false;
     }
 
     /**

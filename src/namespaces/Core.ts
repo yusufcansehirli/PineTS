@@ -464,6 +464,8 @@ export class Core {
     }
     int(series: any) {
         const val = Series.from(series).get(0);
+        // na propagates: `int(na)` returns na instead of throwing.
+        if (val == null) return undefined;
         if (typeof val !== 'number')
             throw new Error(
                 `Cannot call "int" with argument "x"="${val}". An argument of "literal string" type was used but a "simple int" is expected.`,
@@ -472,6 +474,8 @@ export class Core {
     }
     float(series: any) {
         const val = Series.from(series).get(0);
+        // na propagates: `float(na)` returns na instead of throwing.
+        if (val == null) return undefined;
         if (typeof val !== 'number')
             throw new Error(
                 `Cannot call "float" with argument "x"="${val}". An argument of "literal string" type was used but a "const float" is expected.`,

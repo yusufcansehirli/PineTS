@@ -63,7 +63,11 @@ export function isValueOfType(value: any, type: PineArrayType) {
     if (type === PineArrayType.any) return true;
     switch (type) {
         case PineArrayType.int:
-            return Number.isInteger(value) || isNaN(value);
+            // Numbers are accepted for int arrays: runtime values do not carry
+            // Pine's int/float literal distinction (`0.` and `0` are the same JS
+            // number), so a strict integer check rejects legitimate float-literal
+            // arrays created via `array.from(0., 0.)`. Values are stored as-is.
+            return typeof value === 'number';
         case PineArrayType.float:
             return typeof value === 'number';
         case PineArrayType.string:

@@ -13,6 +13,7 @@ import {
     addArrayAccess,
     createScopedVariableReference,
     createScopedVariableAccess,
+    applyMethodCallOptionalChaining,
 } from './ExpressionTransformer';
 
 /**
@@ -880,6 +881,11 @@ export function transformForStatement(node: any, scopeManager: ScopeManager, c: 
                 // Traverse arguments so identifiers get $.get() wrapping
                 for (const arg of node.arguments) {
                     c(arg, state);
+                }
+                // For-header method calls bypass transformCallExpression; apply the
+                // na-safe optional chaining here too (e.g. `dRP.size()` → `?.size?.()`).
+                if (!node._transformed) {
+                    applyMethodCallOptionalChaining(node);
                 }
             },
         });
