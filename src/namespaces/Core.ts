@@ -198,6 +198,15 @@ export class Core {
         }
         return _options;
     }
+    /**
+     * `library(...)` declaration — library scripts carry one instead of
+     * `indicator(...)`. Standalone runs treat its options like indicator
+     * options so plots and inputs still behave.
+     */
+    library(...args) {
+        return this.indicator(...args);
+    }
+
     indicator(...args) {
         // The transpiler wraps every positional arg with `$.param(...)`, which
         // promotes booleans / numbers to a `Series` instance (strings and

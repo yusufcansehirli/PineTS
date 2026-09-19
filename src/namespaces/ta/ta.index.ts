@@ -47,6 +47,7 @@ import { percentile_nearest_rank } from './methods/percentile_nearest_rank';
 import { percentrank } from './methods/percentrank';
 import { pivothigh } from './methods/pivothigh';
 import { pivotlow } from './methods/pivotlow';
+import { pivot_point_levels } from './methods/pivot_point_levels';
 import { pvi } from './methods/pvi';
 import { pvt } from './methods/pvt';
 import { range } from './methods/range';
@@ -119,6 +120,7 @@ const methods = {
   percentrank,
   pivothigh,
   pivotlow,
+  pivot_point_levels,
   pvi,
   pvt,
   range,
@@ -190,6 +192,7 @@ export class TechnicalAnalysis {
   percentrank: ReturnType<typeof methods.percentrank>;
   pivothigh: ReturnType<typeof methods.pivothigh>;
   pivotlow: ReturnType<typeof methods.pivotlow>;
+  pivot_point_levels: ReturnType<typeof methods.pivot_point_levels>;
   pvi: ReturnType<typeof methods.pvi>;
   pvt: ReturnType<typeof methods.pvt>;
   range: ReturnType<typeof methods.range>;

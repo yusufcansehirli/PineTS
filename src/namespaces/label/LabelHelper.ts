@@ -3,6 +3,7 @@
 import { Series } from '../../Series';
 import { parseArgsForPineParams } from '../utils';
 import { LabelObject } from './LabelObject';
+import { PineArrayObject, PineArrayType } from '../array/PineArrayObject';
 import { ChartPointObject } from '../chart/ChartPointObject';
 import { NAHelper } from '../Core';
 import { silentInSecondary } from '../silentInSecondary';
@@ -351,8 +352,10 @@ export class LabelHelper {
 
     // --- Property: all active labels ---
 
-    get all(): LabelObject[] {
-        return this._labels.filter((l) => !l._deleted);
+    get all(): PineArrayObject {
+        // A Pine `array<label>` — array.size/get/loops over it are the script-side
+        // contract (`label.all` is never a plain JS array in Pine).
+        return new PineArrayObject(this._labels.filter((l) => !l._deleted), PineArrayType.label, this.context);
     }
 
     /**

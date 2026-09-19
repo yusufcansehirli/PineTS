@@ -3,6 +3,7 @@
 import { Series } from '../../Series';
 import { LineObject } from '../line/LineObject';
 import { LinefillObject } from './LinefillObject';
+import { PineArrayObject, PineArrayType } from '../array/PineArrayObject';
 import { NAHelper } from '../Core';
 import { silentInSecondary } from '../silentInSecondary';
 
@@ -169,8 +170,9 @@ export class LinefillHelper {
     }
 
     // linefill.all — all active linefill objects
-    get all(): LinefillObject[] {
-        return this._linefills.filter((lf) => !lf._deleted);
+    get all(): PineArrayObject {
+        // A Pine `array<linefill>` — see LabelHelper.all.
+        return new PineArrayObject(this._linefills.filter((lf) => !lf._deleted), PineArrayType.linefill, this.context);
     }
 
     /**

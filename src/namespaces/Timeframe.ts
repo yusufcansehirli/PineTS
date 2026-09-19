@@ -133,7 +133,9 @@ export class Timeframe {
         }
         if (seconds < 60 * 60 * 24) {
             const roundedMinutes = Math.ceil(seconds / 60);
-            return roundedMinutes;
+            // Pine's `timeframe.from_seconds` returns a STRING; a bare JS number here
+            // broke every downstream consumer (request.security threw 'Invalid timeframe').
+            return String(roundedMinutes);
         }
         //check whole weeks first
         if (seconds <= 60 * 60 * 24 * 7 * 52) {

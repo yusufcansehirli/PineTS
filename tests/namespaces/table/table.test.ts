@@ -232,10 +232,10 @@ describe('TABLE Namespace', () => {
 
         const { result } = await pineTS.run((context) => {
             var t = table.new('top_right', 3, 2);
-            var countBefore = table.all.length;
+            var countBefore = table.all.array.length;
             table.delete(t);
             var deletedFlag = t._deleted;
-            var countAfter = table.all.length;
+            var countAfter = table.all.array.length;
             return { deletedFlag, countBefore, countAfter };
         });
 
@@ -250,9 +250,9 @@ describe('TABLE Namespace', () => {
         const { result } = await pineTS.run((context) => {
             var t1 = table.new('top_right', 2, 2);
             var t2 = table.new('bottom_left', 2, 2);
-            var totalCount = table.all.length;
+            var totalCount = table.all.array.length;
             table.delete(t2);
-            var afterDeleteCount = table.all.length;
+            var afterDeleteCount = table.all.array.length;
             return { totalCount, afterDeleteCount };
         });
 
@@ -265,10 +265,10 @@ describe('TABLE Namespace', () => {
 
         const { result } = await pineTS.run((context) => {
             var t = table.new('top_right', 2, 2);
-            var countBefore = table.all.length;
+            var countBefore = table.all.array.length;
             t.delete();
             var deletedFlag = t._deleted;
-            var countAfter = table.all.length;
+            var countAfter = table.all.array.length;
             return { deletedFlag, countBefore, countAfter };
         });
 

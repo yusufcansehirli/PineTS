@@ -260,10 +260,10 @@ describe('LINE Namespace', () => {
 
         const { result } = await pineTS.run((context) => {
             var myLine = line.new(0, 50000, 10, 60000);
-            var countBefore = line.all.length;
+            var countBefore = line.all.array.length;
             line.delete(myLine);
             var deletedFlag = myLine._deleted;
-            var countAfter = line.all.length;
+            var countAfter = line.all.array.length;
             return { deletedFlag, countBefore, countAfter };
         });
 
@@ -279,9 +279,9 @@ describe('LINE Namespace', () => {
             line.new(0, 50000, 10, 60000);
             line.new(5, 55000, 15, 65000);
             var line3 = line.new(10, 60000, 20, 70000);
-            var totalCount = line.all.length;
+            var totalCount = line.all.array.length;
             line.delete(line3);
-            var afterDeleteCount = line.all.length;
+            var afterDeleteCount = line.all.array.length;
             return { totalCount, afterDeleteCount };
         });
 

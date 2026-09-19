@@ -33,3 +33,28 @@ export function normalizeTimeframe(tf: string): string {
     // Return as-is (will fail indexOf check and throw Error)
     return tf;
 }
+
+/**
+ * Duration in ms of a (normalized) timeframe string — the RANK used to compare
+ * chart vs requested timeframes. Unlike the fixed TIMEFRAMES ladder it accepts
+ * every valid v6 form: bare minutes ('300'), seconds ('30S'), and multiples of
+ * days/weeks/months ('2D', '3W'). Returns 0 when the value is not a timeframe.
+ */
+export function timeframeDurationMs(tf: string): number {
+    if (tf == null) return 0;
+    const t = String(tf).trim();
+    if (!t) return 0;
+    // Bare named periods: 'D'/'W'/'M' imply a count of 1.
+    const named = /^([DWM])$/i.exec(t);
+    if (named) {
+        const u = named[1]!.toUpperCase();
+        return u === 'D' ? 86_400_000 : u === 'W' ? 604_800_000 : 2_592_000_000;
+    }
+    const m = /^([1-9]\d*)\s*([SDWM]?)$/i.exec(t);
+    if (!m) return 0;
+    const n = parseInt(m[1]!, 10);
+    if (!Number.isFinite(n) || n < 1) return 0;
+    const unit = (m[2] ?? '').toUpperCase();
+    const base = unit === 'S' ? 1_000 : unit === 'D' ? 86_400_000 : unit === 'W' ? 604_800_000 : unit === 'M' ? 2_592_000_000 : 60_000;
+    return n * base;
+}

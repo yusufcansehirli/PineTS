@@ -2,6 +2,7 @@
 
 import { Series } from '../../Series';
 import { TableObject, truncCoord } from './TableObject';
+import { PineArrayObject, PineArrayType } from '../array/PineArrayObject';
 import { silentInSecondary } from '../silentInSecondary';
 
 // Complete named-parameter lists for named-args detection. These MUST cover
@@ -439,8 +440,9 @@ export class TableHelper {
 
     // ── Property getter ────────────────────────────────────────
 
-    get all(): TableObject[] {
-        return this._tables.filter((t) => !t._deleted);
+    get all(): PineArrayObject {
+        // A Pine `array<table>` — see LabelHelper.all.
+        return new PineArrayObject(this._tables.filter((t) => !t._deleted), PineArrayType.table, this.context);
     }
 
     /**

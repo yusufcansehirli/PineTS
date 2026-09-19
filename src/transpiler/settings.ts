@@ -204,7 +204,7 @@ export const JS_RESERVED_WORDS = new Set([
 ]);
 
 // All known data variables in the context
-export const CONTEXT_DATA_VARS = ['open', 'high', 'low', 'close', 'volume', 'hl2', 'hlc3', 'ohlc4', 'hlcc4', 'openTime', 'closeTime'];
+export const CONTEXT_DATA_VARS = ['open', 'high', 'low', 'close', 'volume', 'hl2', 'hlc3', 'ohlc4', 'hlcc4', 'openTime', 'closeTime', 'ask', 'bid'];
 
 // All known Pine variables in the context
 export const CONTEXT_PINE_VARS = [

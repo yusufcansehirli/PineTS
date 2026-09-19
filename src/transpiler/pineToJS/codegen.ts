@@ -530,6 +530,8 @@ export class CodeGenerator {
                 return this.generateForStatement(node);
             case 'WhileStatement':
                 return this.generateWhileStatement(node);
+            case 'ImportStatement':
+                return this.generateImportStatement(node);
             case 'ReturnStatement':
                 return this.generateReturnStatement(node);
             case 'BlockStatement':
@@ -1353,6 +1355,15 @@ export class CodeGenerator {
 
         this.write(') ');
         this.generateBlockStatement(node.body, false);
+    }
+
+    // Generate ImportStatement — bind the alias to the runtime library registry.
+    // A library absent from the registry resolves to a proxy that throws a clear
+    // error only when its members are actually USED.
+    generateImportStatement(node) {
+        if (!node.alias) return; // unnamed imports carry no local binding
+        this.write(this.indentStr.repeat(this.indent));
+        this.write(`const ${node.alias} = $.importLib(${JSON.stringify(node.path)});\n`);
     }
 
     // Generate WhileStatement

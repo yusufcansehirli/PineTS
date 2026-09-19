@@ -280,6 +280,48 @@ export class Lexer {
     readString() {
         const quote = this.advance();
         const startCol = this.column - 1;
+
+        // Pine v6 (2026): triple-quoted MULTILINE strings — """...""" / '''...'''.
+        // Literal text; real newlines are preserved verbatim; the matching triple
+        // quote closes it. Escape sequences behave as in single-line strings.
+        if (this.peek() === quote && this.peek(1) === quote) {
+            this.advance();
+            this.advance();
+            let multi = '';
+            while (
+                this.pos < this.source.length &&
+                !(this.peek() === quote && this.peek(1) === quote && this.peek(2) === quote)
+            ) {
+                const ch = this.advance();
+                if (ch === '\r') continue; // normalize CRLF → LF
+                if (ch === '\n') {
+                    this.line++;
+                    this.column = 1;
+                }
+                if (ch === '\\' && this.peek() !== quote) {
+                    const escaped = this.advance();
+                    switch (escaped) {
+                        case 'n': multi += '\n'; break;
+                        case 't': multi += '\t'; break;
+                        case 'r': multi += '\r'; break;
+                        case '\\': multi += '\\'; break;
+                        case quote: multi += quote; break;
+                        default: multi += escaped;
+                    }
+                    continue;
+                }
+                multi += ch;
+            }
+            if (!(this.peek() === quote && this.peek(1) === quote && this.peek(2) === quote)) {
+                throw new Error(`Unterminated multiline string at ${this.line}:${startCol}`);
+            }
+            this.advance();
+            this.advance();
+            this.advance();
+            this.addToken(TokenType.STRING, multi);
+            return;
+        }
+
         let value = '';
 
         while (this.pos < this.source.length && this.peek() !== quote) {

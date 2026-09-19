@@ -184,10 +184,10 @@ describe('LABEL Namespace', () => {
 
         const { result } = await pineTS.run((context) => {
             var myLabel = label.new(bar_index, close, 'ToDelete');
-            var countBefore = label.all.length;
+            var countBefore = label.all.array.length;
             label.delete(myLabel);
             var deletedFlag = myLabel._deleted;
-            var countAfter = label.all.length;
+            var countAfter = label.all.array.length;
             return { deletedFlag, countBefore, countAfter };
         });
 
@@ -203,9 +203,9 @@ describe('LABEL Namespace', () => {
             label.new(bar_index, close, 'L1');
             label.new(bar_index, close, 'L2');
             var myLabel3 = label.new(bar_index, close, 'L3');
-            var totalCount = label.all.length;
+            var totalCount = label.all.array.length;
             label.delete(myLabel3);
-            var afterDeleteCount = label.all.length;
+            var afterDeleteCount = label.all.array.length;
             return { totalCount, afterDeleteCount };
         });
 

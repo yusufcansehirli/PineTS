@@ -298,10 +298,10 @@ describe('BOX Namespace', () => {
 
         const { result } = await pineTS.run((context) => {
             var b = box.new(0, 60000, 10, 50000);
-            var countBefore = box.all.length;
+            var countBefore = box.all.array.length;
             box.delete(b);
             var deletedFlag = b._deleted;
-            var countAfter = box.all.length;
+            var countAfter = box.all.array.length;
             return { deletedFlag, countBefore, countAfter };
         });
 
@@ -317,9 +317,9 @@ describe('BOX Namespace', () => {
             box.new(0, 60000, 10, 50000);
             box.new(5, 65000, 15, 55000);
             var box3 = box.new(10, 70000, 20, 60000);
-            var totalCount = box.all.length;
+            var totalCount = box.all.array.length;
             box.delete(box3);
-            var afterDeleteCount = box.all.length;
+            var afterDeleteCount = box.all.array.length;
             return { totalCount, afterDeleteCount };
         });
 
@@ -332,10 +332,10 @@ describe('BOX Namespace', () => {
 
         const { result } = await pineTS.run((context) => {
             var b = box.new(0, 60000, 10, 50000);
-            var countBefore = box.all.length;
+            var countBefore = box.all.array.length;
             b.delete();
             var deletedFlag = b._deleted;
-            var countAfter = box.all.length;
+            var countAfter = box.all.array.length;
             return { deletedFlag, countBefore, countAfter };
         });
 

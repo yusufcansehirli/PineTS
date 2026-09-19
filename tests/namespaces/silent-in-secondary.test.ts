@@ -59,9 +59,9 @@ describe('silentInSecondary — side-effect helpers no-op in secondary contexts'
 
         // Sanity: the main context DID accumulate drawings (these calls
         // ran in the primary, where the decorator does nothing).
-        const mainLines = (context as any).pine.line.all;
-        const mainLabels = (context as any).pine.label.all;
-        const mainBoxes = (context as any).pine.box.all;
+        const mainLines = (context as any).pine.line.all.array;
+        const mainLabels = (context as any).pine.label.all.array;
+        const mainBoxes = (context as any).pine.box.all.array;
         expect(mainLines.length).toBeGreaterThan(0);
         expect(mainLabels.length).toBeGreaterThan(0);
         expect(mainBoxes.length).toBeGreaterThan(0);
@@ -72,10 +72,10 @@ describe('silentInSecondary — side-effect helpers no-op in secondary contexts'
         const ltfKey = cacheKeys.find((k) => k.includes('_lower'));
         expect(ltfKey).toBeDefined();
         const sec = (context as any).cache[ltfKey!].context;
-        expect(sec.pine.line.all.length).toBe(0);
-        expect(sec.pine.label.all.length).toBe(0);
-        expect(sec.pine.box.all.length).toBe(0);
-        expect(sec.pine.polyline.all.length).toBe(0);
+        expect(sec.pine.line.all.array.length).toBe(0);
+        expect(sec.pine.label.all.array.length).toBe(0);
+        expect(sec.pine.box.all.array.length).toBe(0);
+        expect(sec.pine.polyline.all.array.length).toBe(0);
     });
 
     it('plot helpers no-op when context.isSecondaryContext is true', async () => {

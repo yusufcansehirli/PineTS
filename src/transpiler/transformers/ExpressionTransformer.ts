@@ -839,6 +839,7 @@ function getParamFromBinaryExpression(node: any, scopeManager: ScopeManager, nam
     walk.recursive(binaryExpr, scopeManager, {
         CallExpression(node: any, scopeManager: ScopeManager) {
             if (!node._transformed) {
+                autoCallNamespaceChain(node, scopeManager);
                 transformCallExpression(node, scopeManager);
             }
         },
@@ -868,6 +869,7 @@ function getParamFromLogicalExpression(node: any, scopeManager: ScopeManager, na
     walk.recursive(logicalExpr, scopeManager, {
         CallExpression(node: any, scopeManager: ScopeManager) {
             if (!node._transformed) {
+                autoCallNamespaceChain(node, scopeManager);
                 transformCallExpression(node, scopeManager);
             }
         },
@@ -1021,6 +1023,7 @@ function getParamFromUnaryExpression(node: any, scopeManager: ScopeManager, name
     walk.recursive(unaryExpr, scopeManager, {
         CallExpression(node: any, scopeManager: ScopeManager) {
             if (!node._transformed) {
+                autoCallNamespaceChain(node, scopeManager);
                 transformCallExpression(node, scopeManager);
             }
         },
@@ -1030,6 +1033,35 @@ function getParamFromUnaryExpression(node: any, scopeManager: ScopeManager, name
     });
 
     return unaryExpr;
+}
+
+/**
+ * Auto-call the intermediate members of a namespace chain in ARGUMENT position
+ * (e.g. plot(strategy.closedtrades.profit(0))). The statement walker inserts these
+ * calls for every non-callee member under a known namespace; argument paths bypass
+ * the walker, so the same insertion runs here — `strategy.closedtrades.commission(x)`
+ * reaches the runtime as `strategy.closedtrades().commission(x)`.
+ */
+function autoCallNamespaceChain(callNode: any, scopeManager: ScopeManager): void {
+    const callee = callNode?.callee;
+    if (!callee || callee.type !== 'MemberExpression') return;
+    const chain: any[] = [];
+    let cursor: any = callee;
+    while (cursor && cursor.type === 'MemberExpression') {
+        chain.push(cursor);
+        cursor = cursor.object;
+    }
+    if (!cursor || cursor.type !== 'Identifier' || !KNOWN_NAMESPACES.includes(cursor.name) || !scopeManager.isContextBound(cursor.name)) {
+        return;
+    }
+    // chain = [outermost … innermost]; every member EXCEPT the outermost (the call's
+    // own property) becomes a call on the member beneath it.
+    for (let i = chain.length - 1; i >= 1; i--) {
+        const member = chain[i];
+        if (member._autoCalled) continue;
+        const innerCall: any = { type: 'CallExpression', callee: member, arguments: [], _transformed: true, _autoCalled: true };
+        chain[i - 1].object = innerCall;
+    }
 }
 
 export function transformFunctionArgument(arg: any, namespace: string, scopeManager: ScopeManager): any {
@@ -1073,6 +1105,7 @@ export function transformFunctionArgument(arg: any, namespace: string, scopeMana
                 // Recurse into non-Identifier elements using the same helpers
                 // the outer switch uses when these shapes appear at top level.
                 if (element.type === 'CallExpression') {
+                    autoCallNamespaceChain(element, scopeManager);
                     transformCallExpression(element, scopeManager);
                     return element;
                 }
@@ -1391,6 +1424,7 @@ export function transformFunctionArgument(arg: any, namespace: string, scopeMana
     // For all other cases, transform normally
 
     if (arg?.type === 'CallExpression') {
+        autoCallNamespaceChain(arg, scopeManager);
         transformCallExpression(arg, scopeManager, namespace);
     }
 
@@ -1487,6 +1521,13 @@ export function transformCallExpression(node: any, scopeManager: ScopeManager, n
     if (node._transformed) {
         return;
     }
+
+    // Namespace-factory chains (`strategy.closedtrades.entry_time(...)` etc.) need
+    // their intermediate members auto-called BEFORE this call transforms. Some
+    // expression paths (ternary/binary operands, argument slots) reach here
+    // without the statement walker having done it; the `_autoCalled` guard keeps
+    // this idempotent across the paths that DO.
+    autoCallNamespaceChain(node, scopeManager);
 
     if (node.callee && node.callee.name === 'kernel_matrix') {
         // console.log('Transforming kernel_matrix call');

@@ -44,6 +44,8 @@ export class Context {
         hlc3: new Series([]),
         ohlc4: new Series([]),
         hlcc4: new Series([]),
+        ask: new Series([]),
+        bid: new Series([]),
         bar_index: new Series([]),
     };
     public indicator: IndicatorOptions;
@@ -57,6 +59,30 @@ export class Context {
 
     public __maxLoops: number = 500000;
     public NA: any = NaN;
+
+    /** Library registry for Pine `import` statements: path → resolved exports. */
+    public libraries: Record<string, any> = {};
+
+    /**
+     * Resolve an `import`-ed library. When the host registered the library's
+     * exports under its path, they are returned verbatim; otherwise a proxy
+     * throws a clear error the moment a member is USED — merely declaring the
+     * import never fails.
+     */
+    importLib(path: string): any {
+        const lib = this.libraries?.[path];
+        if (lib) return lib;
+        const fail = (member?: string) => {
+            throw new Error(
+                `[pinets] import "${path}" is not available in this runtime — register the library's source or exports before running the script` +
+                    (member ? ` (missing member: ${member}).` : '.'),
+            );
+        };
+        return new Proxy(function () {} as any, {
+            get: (_t, prop) => (typeof prop === 'string' ? () => fail(prop) : undefined),
+            apply: () => fail(),
+        });
+    }
 
     /** Runtime warnings (OOB access, etc.) — non-blocking, script continues. */
     public warnings: { message: string; method?: string; bar: number }[] = [];
@@ -183,6 +209,7 @@ export class Context {
 
             nz: core.nz.bind(core),
             indicator: core.indicator.bind(core),
+            library: core.library.bind(core),
             fixnan: core.fixnan.bind(core),
             alertcondition: core.alertcondition.bind(core),
             alert: new AlertHelper(this),

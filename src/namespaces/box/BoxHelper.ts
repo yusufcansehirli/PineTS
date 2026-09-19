@@ -3,6 +3,7 @@
 import { Series } from '../../Series';
 import { parseArgsForPineParams } from '../utils';
 import { BoxObject } from './BoxObject';
+import { PineArrayObject, PineArrayType } from '../array/PineArrayObject';
 import { ChartPointObject } from '../chart/ChartPointObject';
 import { NAHelper } from '../Core';
 import { silentInSecondary } from '../silentInSecondary';
@@ -408,8 +409,9 @@ export class BoxHelper {
         if (id) id._deleted = true;
     }
 
-    get all(): BoxObject[] {
-        return this._boxes.filter((b) => !b._deleted);
+    get all(): PineArrayObject {
+        // A Pine `array<box>` — see LabelHelper.all.
+        return new PineArrayObject(this._boxes.filter((b) => !b._deleted), PineArrayType.box, this.context);
     }
 
     /**

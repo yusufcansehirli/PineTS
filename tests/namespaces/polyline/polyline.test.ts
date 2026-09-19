@@ -113,10 +113,10 @@ describe('POLYLINE Namespace', () => {
                 chart.point.from_index(5, 60000),
             );
             var pl = polyline.new(pts);
-            var countBefore = polyline.all.length;
+            var countBefore = polyline.all.array.length;
             polyline.delete(pl);
             var deletedFlag = pl._deleted;
-            var countAfter = polyline.all.length;
+            var countAfter = polyline.all.array.length;
             return { deletedFlag, countBefore, countAfter };
         });
 
@@ -133,9 +133,9 @@ describe('POLYLINE Namespace', () => {
             var pts2 = array.from(chart.point.from_index(0, 40000), chart.point.from_index(5, 50000));
             var pl1 = polyline.new(pts1);
             var pl2 = polyline.new(pts2);
-            var totalCount = polyline.all.length;
+            var totalCount = polyline.all.array.length;
             polyline.delete(pl2);
-            var afterDeleteCount = polyline.all.length;
+            var afterDeleteCount = polyline.all.array.length;
             return { totalCount, afterDeleteCount };
         });
 
@@ -152,10 +152,10 @@ describe('POLYLINE Namespace', () => {
                 chart.point.from_index(5, 60000),
             );
             var pl = polyline.new(pts);
-            var countBefore = polyline.all.length;
+            var countBefore = polyline.all.array.length;
             pl.delete();
             var deletedFlag = pl._deleted;
-            var countAfter = polyline.all.length;
+            var countAfter = polyline.all.array.length;
             return { deletedFlag, countBefore, countAfter };
         });
 

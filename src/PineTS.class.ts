@@ -39,6 +39,11 @@ export class PineTS {
     public hlcc4: any = [];
     public openTime: any = [];
     public closeTime: any = [];
+    // ask/bid exist on every symbol but carry data ONLY on tick charts (TV
+    // semantics) — na everywhere else. Kept as full-length NaN series so
+    // indexing and na-checks behave like any other price series.
+    public ask: any = [];
+    public bid: any = [];
     //#endregion
 
     //#region run context
@@ -77,6 +82,9 @@ export class PineTS {
     private _syminfo: ISymbolInfo;
     private _chartTimezone: string | null = null;
 
+    /** Library registry handed to every context: `import` path → resolved exports. */
+    private _libraries: Record<string, any> = {};
+
     /**
      * Set the chart display timezone (like TradingView's timezone picker).
      * This only affects log timestamp formatting — it does NOT change the timezone
@@ -84,6 +92,15 @@ export class PineTS {
      * always use the exchange timezone from syminfo.timezone.
      * @param timezone IANA timezone name (e.g. 'America/New_York'), UTC offset ('UTC+5'), or 'UTC'
      */
+    /**
+     * Register libraries for Pine `import` statements (path → resolved exports,
+     * e.g. hand-resolved or transpiled library functions). Scripts referencing
+     * an unregistered library fail with a clear error only when it is used.
+     */
+    public setLibraries(libs: Record<string, any>): void {
+        this._libraries = { ...(libs ?? {}) };
+    }
+
     public setTimezone(timezone: string) {
         this._chartTimezone = timezone;
     }
@@ -253,6 +270,9 @@ export class PineTS {
                 this.hlcc4 = _hlcc4;
                 this.openTime = _openTime;
                 this.closeTime = _closeTime;
+                const _askBidNa = marketData.map(() => NaN);
+                this.ask = _askBidNa.slice();
+                this.bid = _askBidNa.slice();
 
                 if (source && (source as IProvider).getSymbolInfo) {
                     const symbolInfo = (source as IProvider)
@@ -637,6 +657,8 @@ export class PineTS {
             context.data.hlc3.data.pop();
             context.data.ohlc4.data.pop();
             context.data.hlcc4.data.pop();
+            context.data.ask.data.pop();
+            context.data.bid.data.pop();
             context.data.openTime.data.pop();
             if (context.data.closeTime) context.data.closeTime.data.pop();
             context.data.bar_index.data.pop();
@@ -793,6 +815,8 @@ export class PineTS {
         this.hlc3[index] = (candle.high + candle.low + candle.close) / 3;
         this.ohlc4[index] = (candle.high + candle.low + candle.open + candle.close) / 4;
         this.hlcc4[index] = (candle.high + candle.low + candle.close + candle.close) / 4;
+        this.ask[index] = NaN;
+        this.bid[index] = NaN;
         this.openTime[index] = candle.openTime;
         this.closeTime[index] = candle.closeTime;
     }
@@ -812,6 +836,8 @@ export class PineTS {
         this.hlc3.push((candle.high + candle.low + candle.close) / 3);
         this.ohlc4.push((candle.high + candle.low + candle.open + candle.close) / 4);
         this.hlcc4.push((candle.high + candle.low + candle.close + candle.close) / 4);
+        this.ask.push(NaN);
+        this.bid.push(NaN);
         this.openTime.push(candle.openTime);
         this.closeTime.push(candle.closeTime);
     }
@@ -1129,6 +1155,9 @@ export class PineTS {
         if (this._chartTimezone) {
             context.chartTimezone = this._chartTimezone;
         }
+        if (this._libraries && Object.keys(this._libraries).length > 0) {
+            context.libraries = this._libraries;
+        }
         // Host-bound viewport overrides (chart.left/right_visible_bar_time).
         // Undefined values mean "use marketData-derived defaults" — see ChartHelper.
         context.viewportLeft = this._viewportLeft;
@@ -1155,6 +1184,8 @@ export class PineTS {
         context.data.hlcc4 = new Series([]);
         context.data.openTime = new Series([]);
         context.data.closeTime = new Series([]);
+        context.data.ask = new Series([]);
+        context.data.bid = new Series([]);
 
         context.length = this.data.length;
 
@@ -1181,6 +1212,8 @@ export class PineTS {
             context.data.hlc3.data.push(this.hlc3[i]);
             context.data.ohlc4.data.push(this.ohlc4[i]);
             context.data.hlcc4.data.push(this.hlcc4[i]);
+            context.data.ask.data.push(this.ask[i]);
+            context.data.bid.data.push(this.bid[i]);
             context.data.openTime.data.push(this.openTime[i]);
             context.data.closeTime.data.push(this.closeTime[i]);
             context.data.bar_index.data.push(i);

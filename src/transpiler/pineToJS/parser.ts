@@ -283,6 +283,14 @@ export class Parser {
             const keyword = this.advance().value;
             stmt = new ExpressionStatement(new Identifier(keyword));
         }
+        // Library imports (v6): `import user/library/1 as alias`
+        else if (this.match(TokenType.KEYWORD, 'import')) {
+            stmt = this.parseImportStatement();
+        }
+        // Library exports (v6): `export` prefixes a top-level declaration
+        else if (this.match(TokenType.KEYWORD, 'export')) {
+            stmt = this.parseExportedDeclaration();
+        }
         // Tuple destructuring [a, b] = ...
         else if (this.isTupleDestructuring()) {
             stmt = this.parseTupleDestructuring();
@@ -439,6 +447,64 @@ export class Parser {
         }
 
         return baseType; // Simple type: "float", "int", etc.
+    }
+
+    // Parse `import user/library/1 as alias` (v6 libraries).
+    parseImportStatement() {
+        const startTok = this.peek();
+        this.advance(); // consume the 'import' keyword
+        const segments: string[] = [];
+        let alias: string | null = null;
+
+        const tok = this.advance();
+        if (tok.type !== TokenType.IDENTIFIER) {
+            throw new Error(`Expected a library name after 'import' at ${tok.line}:${tok.column}`);
+        }
+        let current = String(tok.value);
+        for (;;) {
+            const nx = this.peek();
+            if (nx.type === TokenType.DOT) {
+                this.advance();
+                const part = this.advance();
+                current += '.' + String(part.value);
+                continue;
+            }
+            if (nx.type === TokenType.OPERATOR && nx.value === '/') {
+                this.advance();
+                segments.push(current);
+                const part = this.advance();
+                if (part.type !== TokenType.IDENTIFIER && part.type !== TokenType.NUMBER) {
+                    throw new Error(`Expected a path segment in import at ${part.line}:${part.column}`);
+                }
+                current = String(part.value);
+                continue;
+            }
+            break;
+        }
+        segments.push(current);
+        // 'as' is a CONTEXTUAL keyword in Pine — the lexer emits it as an identifier.
+        if (this.match(TokenType.KEYWORD, 'as') || this.match(TokenType.IDENTIFIER, 'as')) {
+            this.advance(); // consume 'as'
+            const a = this.advance();
+            if (a.type !== TokenType.IDENTIFIER) {
+                throw new Error(`Expected an alias after 'as' at ${a.line}:${a.column}`);
+            }
+            alias = String(a.value);
+        }
+        return { type: 'ImportStatement', path: segments.join('/'), alias };
+    }
+
+    // Parse `export`-prefixed declarations (library scripts).
+    parseExportedDeclaration() {
+        this.advance(); // consume the 'export' keyword
+        if (this.match(TokenType.KEYWORD, 'type')) return this.parseTypeDefinition();
+        if (this.match(TokenType.KEYWORD, 'enum')) return this.parseEnumDefinition();
+        if (this.match(TokenType.KEYWORD, 'method') && this.isMethodDeclaration()) return this.parseMethodDeclaration();
+        if (this.isFunctionDeclaration()) return this.parseFunctionDeclaration();
+        if (this.match(TokenType.KEYWORD, 'var') || this.match(TokenType.KEYWORD, 'varip')) return this.parseVarDeclaration();
+        if (this.peek().type === TokenType.IDENTIFIER && this.isTypedVarDeclaration()) return this.parseTypedVarDeclaration();
+        const tok = this.peek();
+        throw new Error(`'export' must prefix a function, method, type, or variable declaration at ${tok.line}:${tok.column}`);
     }
 
     // Parse enum definition. Supports both Pine v6 forms:

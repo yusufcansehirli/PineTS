@@ -145,12 +145,14 @@ describe('Timeframe Namespace', () => {
         });
 
         expect(result).toBeDefined();
+        // TV's `timeframe.from_seconds` returns a STRING for every branch
+        // (minute forms come back as plain minute counts, e.g. '60').
         // 60s -> 1 minute
-        expect(last(result.tf_1min)).toBe(1);
+        expect(last(result.tf_1min)).toBe('1');
         // 300s -> 5 minutes
-        expect(last(result.tf_5min)).toBe(5);
+        expect(last(result.tf_5min)).toBe('5');
         // 3600s -> 60 minutes
-        expect(last(result.tf_1hour)).toBe(60);
+        expect(last(result.tf_1hour)).toBe('60');
         // 86400s -> 1D
         expect(last(result.tf_1day)).toBe('1D');
         // 1 week -> 1W

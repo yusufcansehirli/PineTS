@@ -3,6 +3,7 @@
 import { Series } from '../../Series';
 import { parseArgsForPineParams } from '../utils';
 import { LineObject } from './LineObject';
+import { PineArrayObject, PineArrayType } from '../array/PineArrayObject';
 import { ChartPointObject } from '../chart/ChartPointObject';
 import { NAHelper } from '../Core';
 import { silentInSecondary } from '../silentInSecondary';
@@ -369,8 +370,9 @@ export class LineHelper {
 
     // --- Property: all active lines ---
 
-    get all(): LineObject[] {
-        return this._lines.filter((l) => !l._deleted);
+    get all(): PineArrayObject {
+        // A Pine `array<line>` — see LabelHelper.all.
+        return new PineArrayObject(this._lines.filter((l) => !l._deleted), PineArrayType.line, this.context);
     }
 
     /**

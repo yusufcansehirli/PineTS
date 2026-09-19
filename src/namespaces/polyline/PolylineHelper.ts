@@ -2,6 +2,7 @@
 
 import { Series } from '../../Series';
 import { PolylineObject } from './PolylineObject';
+import { PineArrayObject, PineArrayType } from '../array/PineArrayObject';
 import { ChartPointObject } from '../chart/ChartPointObject';
 import { NAHelper } from '../Core';
 import { silentInSecondary } from '../silentInSecondary';
@@ -208,8 +209,9 @@ export class PolylineHelper {
     }
 
     // polyline.all — all active polyline objects
-    get all(): PolylineObject[] {
-        return this._polylines.filter((pl) => !pl._deleted);
+    get all(): PineArrayObject {
+        // A Pine `array<polyline>` — see LabelHelper.all.
+        return new PineArrayObject(this._polylines.filter((pl) => !pl._deleted), PineArrayType.polyline, this.context);
     }
 
     /**

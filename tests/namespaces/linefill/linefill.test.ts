@@ -66,10 +66,10 @@ describe('LINEFILL Namespace', () => {
             var l1 = line.new(0, 50000, 10, 60000);
             var l2 = line.new(0, 40000, 10, 50000);
             var lf = linefill.new(l1, l2, color.blue);
-            var countBefore = linefill.all.length;
+            var countBefore = linefill.all.array.length;
             linefill.delete(lf);
             var deletedFlag = lf._deleted;
-            var countAfter = linefill.all.length;
+            var countAfter = linefill.all.array.length;
             return { deletedFlag, countBefore, countAfter };
         });
 
@@ -87,9 +87,9 @@ describe('LINEFILL Namespace', () => {
             var l3 = line.new(0, 30000, 10, 40000);
             var lf1 = linefill.new(l1, l2, color.blue);
             var lf2 = linefill.new(l2, l3, color.red);
-            var totalCount = linefill.all.length;
+            var totalCount = linefill.all.array.length;
             linefill.delete(lf2);
-            var afterDeleteCount = linefill.all.length;
+            var afterDeleteCount = linefill.all.array.length;
             return { totalCount, afterDeleteCount };
         });
 

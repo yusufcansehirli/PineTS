@@ -3,7 +3,7 @@
 import { PineTS } from '../../../PineTS.class';
 import { Series } from '../../../Series';
 import { splitTickerModifier, withTickerModifier } from '../../../tickerModifier';
-import { TIMEFRAMES, normalizeTimeframe } from '../utils/TIMEFRAMES';
+import { normalizeTimeframe, timeframeDurationMs } from '../utils/TIMEFRAMES';
 import { findSecContextIdx } from '../utils/findSecContextIdx';
 import { findLTFContextIdx } from '../utils/findLTFContextIdx';
 import { parseArgsForPineParams } from '../../utils';
@@ -171,10 +171,13 @@ export function security(context: any) {
             return Array.isArray(resolved) ? [resolved] : resolved;
         }
 
-        const ctxTimeframeIdx = TIMEFRAMES.indexOf(normalizeTimeframe(context.timeframe));
-        const reqTimeframeIdx = TIMEFRAMES.indexOf(normalizeTimeframe(_timeframe));
+        // Rank timeframes by DURATION so arbitrary valid forms ('300' minutes,
+        // '2D' days) work alongside the canonical ladder — the old
+        // TIMEFRAMES.indexOf gate rejected anything off the fixed list.
+        const ctxTfMs = timeframeDurationMs(normalizeTimeframe(context.timeframe));
+        const reqTfMs = timeframeDurationMs(normalizeTimeframe(_timeframe));
 
-        if (ctxTimeframeIdx == -1 || reqTimeframeIdx == -1) {
+        if (!(ctxTfMs > 0) || !(reqTfMs > 0)) {
             throw new Error('Invalid timeframe');
         }
 
@@ -192,14 +195,14 @@ export function security(context: any) {
         const reqModifier = reqParts.modifier === 'standard' ? null : reqParts.modifier; // ";standard" ≡ no modifier
         const isSameSymbol = !_symbol || _symbol === '' || (reqParts.symbol === ctxParts.symbol && reqModifier === chartModifier);
 
-        if (ctxTimeframeIdx === reqTimeframeIdx && isSameSymbol) {
+        if (ctxTfMs === reqTfMs && isSameSymbol) {
             // Resolve any helper objects (TimeComponentHelper, NAHelper, Series, etc.)
             // in the expression that haven't been extracted to their primitive values yet.
             const resolved = resolveExprValue(_expression);
             return Array.isArray(resolved) ? [resolved] : resolved;
         }
 
-        const isLTF = ctxTimeframeIdx > reqTimeframeIdx;
+        const isLTF = ctxTfMs > reqTfMs;
 
         const myOpenTime = Series.from(context.data.openTime).get(0);
         const myCloseTime = Series.from(context.data.closeTime).get(0);
