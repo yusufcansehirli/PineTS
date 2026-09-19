@@ -702,6 +702,13 @@ function transformOperand(node: any, scopeManager: ScopeManager, namespace: stri
                 ? transformIdentifierForParam(node.object, scopeManager)
                 : node.object;
 
+            // An untransformed call inside the object chain (e.g. `get_v.get(1).y`)
+            // must be processed too — otherwise the identifiers inside it stay
+            // raw JS (`ReferenceError: get_v is not defined` at runtime).
+            if (node.object.type === 'CallExpression' && !node.object._transformed) {
+                transformCallExpression(node.object, scopeManager);
+            }
+
             // For non-computed property access on user variables (e.g. get_spt.output),
             // wrap the object in $.get() to extract the current bar's value.
             // Without this, `$.let.glb1_get_spt.output` accesses the Series object itself,

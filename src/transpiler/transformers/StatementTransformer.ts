@@ -1031,6 +1031,11 @@ export function transformExpression(node: any, scopeManager: ScopeManager): void
                 && !node.computed) {
                 node.object.parent = node;
                 c(node.object, state);
+            } else if (node.object && node.object.type === 'CallExpression') {
+                // Chained call in object position (`pivot == get_v.get(1).y`):
+                // walk it too, otherwise the identifiers inside stay raw JS
+                // (`ReferenceError: get_v is not defined` at runtime).
+                c(node.object, state);
             }
             transformMemberExpression(node, '', scopeManager);
         },
