@@ -992,6 +992,16 @@ export class Parser {
 
         // Check if it's a single expression (no INDENT)
         if (!this.match(TokenType.INDENT)) {
+            // Use the sequence-aware statement parser: a comma-separated body
+            // (`=> expr1, expr2`) must produce both statements, with only the
+            // last one becoming the implicit return. A plain parseExpression()
+            // consumed just expr1 and left expr2 raw in the token stream.
+            const stmts = this.parseStatementOrSequence();
+            const list = Array.isArray(stmts) ? stmts : (stmts ? [stmts] : []);
+            if (list.length > 0) {
+                this._addImplicitReturn(list);
+                return new BlockStatement(list);
+            }
             const expr = this.parseExpression();
             return new BlockStatement([new ReturnStatement(expr)]);
         }
