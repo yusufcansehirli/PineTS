@@ -21,10 +21,15 @@ function parseColorToRGBA(color: string): [number, number, number, number] | nul
         return null;
     }
 
-    // rgba(r, g, b, a) or rgb(r, g, b)
-    const rgbaMatch = color.match(/rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\s*\)/);
+    // rgba(r, g, b, a) or rgb(r, g, b) — components may be floats (rounded)
+    const rgbaMatch = color.match(/rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*([\d.]+))?\s*\)/);
     if (rgbaMatch) {
-        return [parseInt(rgbaMatch[1]), parseInt(rgbaMatch[2]), parseInt(rgbaMatch[3]), rgbaMatch[4] ? parseFloat(rgbaMatch[4]) : 1];
+        return [
+            Math.round(parseFloat(rgbaMatch[1])),
+            Math.round(parseFloat(rgbaMatch[2])),
+            Math.round(parseFloat(rgbaMatch[3])),
+            rgbaMatch[4] ? parseFloat(rgbaMatch[4]) : 1,
+        ];
     }
 
     return null;
@@ -186,17 +191,19 @@ export class PineColor {
             }
 
             // Handle rgb(r,g,b) and rgba(r,g,b,a) strings — extract components
-            // to avoid invalid nested formats like "rgba(rgb(207,23,23), 0.3)"
-            const rgbMatch = color.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?\s*\)/);
+            // to avoid invalid nested formats like "rgba(rgb(207,23,23), 0.3)".
+            // Components may carry floats (older engine output / literals) —
+            // accept and round them so the suffix path never nests.
+            const rgbMatch = color.match(/rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*([\d.]+))?\s*\)/);
             if (rgbMatch) {
-                const r = rgbMatch[1];
-                const g = rgbMatch[2];
-                const b = rgbMatch[3];
+                const r = Math.round(parseFloat(rgbMatch[1]));
+                const g = Math.round(parseFloat(rgbMatch[2]));
+                const b = Math.round(parseFloat(rgbMatch[3]));
                 if (a != null) {
                     // Convert to #RRGGBBAA hex for consistency with hex path
-                    const rh = parseInt(r).toString(16).padStart(2, '0');
-                    const gh = parseInt(g).toString(16).padStart(2, '0');
-                    const bh = parseInt(b).toString(16).padStart(2, '0');
+                    const rh = r.toString(16).padStart(2, '0');
+                    const gh = g.toString(16).padStart(2, '0');
+                    const bh = b.toString(16).padStart(2, '0');
                     const ah = Math.round((255 / 100) * (100 - a)).toString(16).padStart(2, '0').toUpperCase();
                     return `#${rh}${gh}${bh}${ah}`;
                 }
@@ -214,7 +221,20 @@ export class PineColor {
     rgb(r: number, g: number, b: number, a?: number) {
         // Treat NaN transparency as "no transparency" (fully opaque)
         if (typeof a === 'number' && isNaN(a)) a = undefined;
-        return a != null ? `rgba(${r}, ${g}, ${b}, ${(100 - a) / 100})` : `rgb(${r}, ${g}, ${b})`;
+        // Pine rounds float components to 0-255 ints (TV parity). Keeping the
+        // emitted string integer-only matters downstream: color.new()'s rgb()
+        // branch and the renderer's CSS parser both reject float components —
+        // `rgb(249.76, …)` leaked through as `rgba(rgb(…), 0.9)` and rendered
+        // BLACK (the renderer's fillStyle readback keeps its #000 default for
+        // unparsable CSS). na components produce an na color, not rgb(NaN,…).
+        const rr = Math.round(Number(r));
+        const gg = Math.round(Number(g));
+        const bb = Math.round(Number(b));
+        if (isNaN(rr) || isNaN(gg) || isNaN(bb)) return NaN;
+        const cl = (n: number) => Math.max(0, Math.min(255, n));
+        return a != null
+            ? `rgba(${cl(rr)}, ${cl(gg)}, ${cl(bb)}, ${(100 - a) / 100})`
+            : `rgb(${cl(rr)}, ${cl(gg)}, ${cl(bb)})`;
     }
 
     // ── color.from_gradient(value, bottom_value, top_value, bottom_color, top_color) ──

@@ -219,6 +219,45 @@ describe('Color Namespace', () => {
         expect(last(result.with_alpha)).toBe('rgba(255, 128, 0, 0.5)');
     });
 
+    it('color.rgb() should round float components (no float leakage into strings)', async () => {
+        const pineTS = new PineTS(Provider.Mock, 'BTCUSDC', 'D', null, sDate, eDate);
+
+        const sourceCode = (context: any) => {
+            const { color } = context.pine;
+
+            // Floats (e.g. the Delta Flow Ribbon's rgb() color ramps) must round.
+            const c = color.rgb(242.6, 69.4, 107.5);
+            // …and a following color.new() must NOT nest "rgba(rgb(…), a)" —
+            // that renders BLACK downstream (unparsable CSS → #000 fallback).
+            const with_alpha = color.new(c, 9);
+            const t = color.t(with_alpha);
+            const ribbon = color.rgb(249.7597, 180.0234, 195.3412);
+
+            return { c, with_alpha, t, ribbon };
+        };
+
+        const { result } = await pineTS.run(sourceCode);
+
+        expect(last(result.c)).toBe('rgb(243, 69, 108)');
+        expect(last(result.with_alpha)).toBe('#f3456cE8');
+        expect(String(last(result.with_alpha))).not.toMatch(/rgba\(rgb/);
+        expect(last(result.t)).toBe(9);
+        expect(last(result.ribbon)).toBe('rgb(250, 180, 195)');
+    });
+
+    it('color.rgb() with na components is an na color, not rgb(NaN,…)', async () => {
+        const pineTS = new PineTS(Provider.Mock, 'BTCUSDC', 'D', null, sDate, eDate);
+
+        const sourceCode = (context: any) => {
+            const { color } = context.pine;
+            const c = color.rgb(NaN, 10, 10);
+            return { c };
+        };
+
+        const { result } = await pineTS.run(sourceCode);
+        expect(last(result.c)).toBeNaN();
+    });
+
     // ── color.from_gradient() ───────────────────────────────────────
 
     it('color.from_gradient() should interpolate between two colors', async () => {
