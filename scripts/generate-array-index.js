@@ -62,6 +62,7 @@ async function generateIndex() {
     label = 'label',
     line = 'line',
     linefill = 'linefill',
+    polyline = 'polyline',
     string = 'string',
     table = 'table',
 }`;

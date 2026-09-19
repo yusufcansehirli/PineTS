@@ -318,7 +318,7 @@ export class Context {
         const plotHelper = new PlotHelper(this);
         const hlineHelper = new HlineHelper(this);
         const fillHelper = new FillHelper(this);
-        this.bindContextObject(plotHelper, ['plotchar', 'plotshape', 'plotarrow', 'plotbar', 'plotcandle', 'bgcolor', 'barcolor']);
+        this.bindContextObject(plotHelper, ['plotchar', 'plotshape', 'plotarrow', 'plotbar', 'plotcandle']);
         this.bindContextObject(
             plotHelper,
             [
@@ -344,6 +344,13 @@ export class Context {
 
         this.bindContextObject(hlineHelper, ['any', 'style_dashed', 'style_solid', 'style_dotted', 'param'], 'hline');
         this.bindContextObject(fillHelper, ['any', 'param'], 'fill');
+
+        // bgcolor/barcolor: bare calls are rewritten to `bgcolor.any(...)` /
+        // `barcolor.any(...)` (both are NAMESPACES_LIKE), so they need the same
+        // namespaced shape as plot/hline/fill — their OWN any (the method itself)
+        // plus `param`. Aliased entries: `bgcolor.any` → plotHelper.bgcolor.
+        this.bindContextObject(plotHelper, ['any:bgcolor', 'param:param'], 'bgcolor');
+        this.bindContextObject(plotHelper, ['any:barcolor', 'param:param'], 'barcolor');
 
         // chart namespace (with nested chart.point sub-namespace)
         const chartHelper = new ChartHelper(this);
@@ -622,10 +629,16 @@ export class Context {
 
         const target = root ? this.pine[root] : this.pine;
         for (const entry of entries) {
-            if (typeof instance[entry] === 'function') {
-                target[entry] = instance[entry].bind(instance);
+            // Entries may be bare member names ('any') or aliased 'alias:member'
+            // (e.g. 'any:bgcolor' — expose plotHelper.bgcolor under the namespaced
+            // `bgcolor.any` shape the transpiler emits for NAMESPACES_LIKE calls).
+            const sep = entry.indexOf(':');
+            const alias = sep === -1 ? entry : entry.slice(0, sep);
+            const member = sep === -1 ? entry : entry.slice(sep + 1);
+            if (typeof instance[member] === 'function') {
+                target[alias] = instance[member].bind(instance);
             } else {
-                target[entry] = instance[entry];
+                target[alias] = instance[member];
             }
         }
     }

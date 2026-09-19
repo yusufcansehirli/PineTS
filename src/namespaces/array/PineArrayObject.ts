@@ -56,6 +56,7 @@ export enum PineArrayType {
     label = 'label',
     line = 'line',
     linefill = 'linefill',
+    polyline = 'polyline',
     string = 'string',
     table = 'table',
 }

@@ -11,6 +11,8 @@ export const KNOWN_NAMESPACES = ['ta', 'math', 'request', 'array', 'input', 'col
 export const NAMESPACES_LIKE = [
     'hline',
     'plot',
+    'bgcolor',
+    'barcolor',
     'fill',
     'label',
     'line',
@@ -91,6 +93,8 @@ export const VIEWPORT_DEPENDENT_BUILTINS = ['chart.left_visible_bar_time', 'char
 // forms.
 export const CALLSITE_ID_NAMESPACES = [
     'plot',           // all plot methods (including plot, plotchar, plotshape, plotarrow, plotbar, plotcandle)
+    'bgcolor',        // untitled bgcolor() must not share the 'plot' fallback key with barcolor()
+    'barcolor',       // (and vice versa) — distinct per-callsite plot keys
     'hline',          // all hline methods
     'fill',           // all fill methods
     'strategy.exit',  // cadence-detection for persistent vs ephemeral exit-parameter capture
