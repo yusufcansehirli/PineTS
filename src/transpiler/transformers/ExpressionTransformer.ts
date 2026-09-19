@@ -1419,6 +1419,15 @@ export function transformFunctionArgument(arg: any, namespace: string, scopeMana
 }
 
 /** Check if a $.get() call exists anywhere in a MemberExpression/CallExpression chain */
+/** True when a member chain is rooted at a namespace/context object
+ *  (`$.pine.math`, `math`, `ta`, …) — such receivers are never na. */
+function isNamespaceRootedChain(node: any): boolean {
+    let cur = node;
+    while (cur && cur.type === 'MemberExpression') cur = cur.object;
+    if (!cur || cur.type !== 'Identifier') return false;
+    return cur.name === '$' || cur.name === 'pine' || KNOWN_NAMESPACES.includes(cur.name);
+}
+
 function hasGetCallInChain(node: any): boolean {
     if (!node) return false;
     if (isDirectGetCall(node)) return true;
@@ -1743,6 +1752,17 @@ export function transformCallExpression(node: any, scopeManager: ScopeManager, n
                 const fieldType = scopeManager.getUdtTypeFields(baseUdtType)?.[_obj.property.name];
                 receiverBaseType = normalizePineBaseType(fieldType);
             }
+        } else if (
+            _obj.type === 'CallExpression' &&
+            _obj.callee?.type === 'MemberExpression' &&
+            !_obj.callee.computed &&
+            _obj.callee.object?.type === 'Identifier' &&
+            _obj.callee.property?.name === 'new' &&
+            ['box', 'label', 'line', 'table', 'polyline', 'linefill', 'chart'].includes(_obj.callee.object.name)
+        ) {
+            // Inline constructor receiver: `box.new(...).track(...)`. The
+            // receiver's static type is the constructor's namespace.
+            receiverBaseType = _obj.callee.object.name;
         }
         const methodReceiverType = scopeManager.getMethodReceiverType(methodName);
         const receiverTypeMatches = !!receiverBaseType && !!methodReceiverType && receiverBaseType === methodReceiverType;
@@ -1934,8 +1954,17 @@ export function transformCallExpression(node: any, scopeManager: ScopeManager, n
         // Case 2 — Chained: $.get(X, N).field.method()
         //   callee.object is a MemberExpression (the .field access), with $.get() deeper
         const isChained = calleeObj?.type === 'MemberExpression' && hasGetCallInChain(calleeObj);
+        // Case 3 — Call-chain receiver: X.first().set_x2() or X.field.builtin().
+        //   Any field access or call result can be `na` in Pine (na.method() is a
+        //   silent no-op there), so attach double optional chaining to the leaf
+        //   method call for these receiver shapes as well. Optional chaining is
+        //   a no-op for present values, so this cannot change live behaviour.
+        const isCallChainReceiver = calleeObj?.type === 'CallExpression' || calleeObj?.type === 'ChainExpression';
+        // Field receivers, but not namespace-rooted chains (`$.pine.math.__gt`,
+        // `math.abs`, …) — those objects are never na.
+        const isFieldReceiver = calleeObj?.type === 'MemberExpression' && !isNamespaceRootedChain(calleeObj);
 
-        if (isDirect || isChained) {
+        if (isDirect || isChained || isCallChainReceiver || isFieldReceiver) {
             // Double optional chaining: obj?.method?.()
             // The node stays as a CallExpression (safe for AST walkers) but gets:
             //   1. optional: true on the CallExpression  → produces ?.()
