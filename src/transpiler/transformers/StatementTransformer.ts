@@ -932,6 +932,11 @@ export function transformForStatement(node: any, scopeManager: ScopeManager, c: 
                 for (const arg of node.arguments) {
                     c(arg, state);
                 }
+                // Update-ternary method calls bypass transformCallExpression; apply
+                // the na-safe optional chaining here too.
+                if (!node._transformed) {
+                    applyMethodCallOptionalChaining(node);
+                }
             },
         });
     }
